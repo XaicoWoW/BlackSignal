@@ -1,0 +1,22 @@
+## Title: Black Signal
+## Notes: User Quality of Life Improvements
+## Author: Xaico, Gwydeon
+## Version: 1.0
+## Interface: 120000, 120001
+## IconTexture: Interface/AddOns/BlackSignal/Shared/icon
+## SavedVariables: BlackSignal_DB
+
+
+Core/Init.lua
+Core/API.lua
+Core/Utils.lua
+Core/Ticker.lua
+Core/Events.lua
+Core/DB.lua
+Core/UI.lua
+Core/Config.lua
+
+
+Modules/Shimmer.lua
+Modules/FocusCastTracker.lua
+Modules/AutoQueue.lua
