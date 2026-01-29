@@ -19,4 +19,4 @@ Core/Config.lua
 
 Modules/Shimmer.lua
 Modules/FocusCastTracker.lua
-Modules/AutoQueue.lua
+Modules/AutoQueue/AutoQueue.lua
