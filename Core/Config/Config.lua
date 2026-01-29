@@ -637,21 +637,8 @@ local function BuildUI()
     f:SetBackdropBorderColor(0, 0, 0, 1)
 
 -- Title + Icon 
-    local function GetAddonMeta(addonName, field)
-        if C_AddOns and C_AddOns.GetAddOnMetadata then
-            return C_AddOns.GetAddOnMetadata(addonName, field)
-        end
-        if _G.GetAddOnMetadata then
-            return _G.GetAddOnMetadata(addonName, field)
-        end
-        return nil
-    end
 
-    local iconPath = GetAddonMeta("BlackSignal", "IconTexture")
-    if not iconPath or iconPath == "" then
-        iconPath = "Interface\\AddOns\\BlackSignal\\Media\\icon.tga"
-    end
-
+    local iconPath =  "Interface\\AddOns\\BlackSignal\\Media\\icon_64.tga"
     local icon = f:CreateTexture(nil, "ARTWORK")
     icon:SetSize(32, 32)
     icon:SetTexture(iconPath)
@@ -659,7 +646,7 @@ local function BuildUI()
     icon:SetPoint("TOPLEFT", f, "TOPLEFT", 18, -14)
 
     local title = UI:CreateText(f, "BlackSignal", "LEFT", icon, "RIGHT", 6, 0, "GameFontNormalLarge")
-    title:SetTextColor(1, 1, 1, 1)
+    title:SetTextColor(127, 63, 191, 1)
 
     -- Close
     local close = CreateFrame("Button", nil, f)
