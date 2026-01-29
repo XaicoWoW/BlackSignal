@@ -661,7 +661,6 @@ local function BuildUI()
     local title = UI:CreateText(f, "BlackSignal", "LEFT", icon, "RIGHT", 6, 0, "GameFontNormalLarge")
     title:SetTextColor(1, 1, 1, 1)
 
-
     -- Close
     local close = CreateFrame("Button", nil, f)
     close:SetSize(32, 32)
