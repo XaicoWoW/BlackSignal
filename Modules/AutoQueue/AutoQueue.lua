@@ -1,6 +1,5 @@
 -- Modules/AutoQueue.lua
--- Auto-complete LFG Role Check (works because CompleteLFGRoleCheck is often not protected)
--- NOTE: This is NOT auto-accepting proposals (AcceptProposal) which is protected.
+-- Auto-complete LFG Role Check
 
 local BS = _G.BS
 if not BS then return end
@@ -18,7 +17,7 @@ BS:RegisterModule(AutoQueue)
 -------------------------------------------------
 local defaults = {
   enabled = true,
-  active = true,          -- auto role check ON/OFF
+  active = true,
   printOnAccept = true,
 }
 
