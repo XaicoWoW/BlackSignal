@@ -1,7 +1,7 @@
 -- Modules/EnemyCastList.lua
--- Listado genérico de casteos de enemigos en combate (via Combat Log)
--- Muestra: "Spell >> Target (by Caster)"
--- No usa cooldown APIs (evita "secret values"). Solo castTime de GetSpellInfo (ms) que es seguro.
+-- Lista simple de casteos de enemigos visibles (nameplates), sin Combat Log.
+-- Muestra: "Spell >> Target (Caster)"
+-- Sin tiempos. Se mantiene mientras UnitCastingInfo/UnitChannelInfo devuelvan cast.
 
 local BS = _G.BS
 if not BS then return end
@@ -25,20 +25,24 @@ local defaults = {
     x = 0,
     y = -40,
 
-    width = 420,
-    maxLines = 6,
+    width = 460,
+    maxLines = 10,
 
     fontSize = 14,
     font = FONT,
 
     updateInterval = 0.05,
 
-    -- Filtros
-    onlyWhilePlayerInCombat = true,     -- si true, solo muestra cuando TU estás en combate
-    onlyIfDestIsMeOrGroup = true,       -- si true, solo registra casts cuyo dest sea tú o tu grupo/raid/pet
+    onlyTargetingMe = true,
+    alphaTargetingMe = 1.0,
+    alphaNotTargetingMe = 0.0,
+    onlyWhilePlayerInCombat = true,
+    onlyHostile = true,
 
-    -- Debug
-    debugAlwaysShow = false,            -- si true, muestra aunque no haya nada (útil para posicionar)
+    showChannels = true,
+
+    debugAlwaysShow = false,
+    noTargetText = "(sin target)",
 }
 
 EnemyCastList.defaults = defaults
@@ -65,38 +69,57 @@ local function EnsureDB()
 end
 
 -------------------------------------------------
+-- Local event frame (avoid Core taint)
+-------------------------------------------------
+function EnemyCastList:EnsureEventFrame()
+    if self.eventFrame then return end
+
+    local ef = CreateFrame("Frame", "BS_EnemyCastList_EventFrame")
+    ef:SetScript("OnEvent", function(_, event, ...)
+        local fn = self.events and self.events[event]
+        if fn then fn(self, ...) end
+    end)
+
+    self.eventFrame = ef
+end
+
+function EnemyCastList:RegisterLocalEvent(eventName)
+    if not self.eventFrame then return end
+    pcall(function() self.eventFrame:RegisterEvent(eventName) end)
+end
+
+function EnemyCastList:UnregisterAllLocalEvents()
+    if not self.eventFrame then return end
+    pcall(function() self.eventFrame:UnregisterAllEvents() end)
+end
+
+-------------------------------------------------
 -- UI
 -------------------------------------------------
 local function EnsureUI(self)
     if self.frame and self.lines then return end
 
     local f = CreateFrame("Frame", "BS_EnemyCastList", UIParent)
-    f:SetSize(420, 140)
     f:SetFrameStrata("LOW")
     f:Hide()
 
     self.frame = f
     self.lines = {}
-
     for i = 1, (defaults.maxLines or 6) do
-        local t = f:CreateFontString(nil, "OVERLAY")
-        t:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -((i - 1) * (defaults.fontSize + 2)))
+        local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         t:SetJustifyH("LEFT")
         t:SetTextColor(1, 1, 1, 1)
-        t:SetText("")
         t:Hide()
         self.lines[i] = t
     end
 end
 
 local function ApplyPosition(self)
-    if not self.frame or not self.db then return end
     self.frame:ClearAllPoints()
     self.frame:SetPoint("CENTER", UIParent, "CENTER", self.db.x or 0, self.db.y or -40)
 end
 
-local function ApplySize(self)
-    if not self.frame or not self.db then return end
+local function ApplySizeAndLayout(self)
     local w = tonumber(self.db.width) or defaults.width
     local maxLines = tonumber(self.db.maxLines) or defaults.maxLines
     if maxLines < 1 then maxLines = 1 end
@@ -104,21 +127,20 @@ local function ApplySize(self)
 
     local fs = tonumber(self.db.fontSize) or defaults.fontSize
     local lineH = fs + 2
-    self.frame:SetSize(w, (maxLines * lineH))
 
-    -- Asegura que existan suficientes líneas
+    self.frame:SetSize(w, maxLines * lineH)
+
+    -- asegura líneas suficientes
     for i = 1, maxLines do
         if not self.lines[i] then
-            local t = self.frame:CreateFontString(nil, "OVERLAY")
+            local t = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             t:SetJustifyH("LEFT")
             t:SetTextColor(1, 1, 1, 1)
-            t:SetText("")
             t:Hide()
             self.lines[i] = t
         end
     end
 
-    -- Recoloca todas las existentes
     for i = 1, #self.lines do
         local t = self.lines[i]
         if t then
@@ -129,101 +151,96 @@ local function ApplySize(self)
 end
 
 local function ApplyFont(self)
-    if not self.lines or not self.db then return end
     local fontPath = self.db.font or FONT
     local fs = tonumber(self.db.fontSize) or defaults.fontSize
+    local fallbackFont, fallbackSize, fallbackFlags = GameFontNormal:GetFont()
 
     for i = 1, #self.lines do
         local t = self.lines[i]
         if t then
-            t:SetFont(fontPath, fs, "OUTLINE")
+            local ok = pcall(function()
+                t:SetFont(fontPath, fs, "OUTLINE")
+            end)
+            if not ok then
+                t:SetFont(fallbackFont, fs or fallbackSize or 14, fallbackFlags or "OUTLINE")
+            end
         end
     end
-end
-
--------------------------------------------------
--- Helpers (group filter)
--------------------------------------------------
-local function IsDestMeOrGroup(destName)
-    if not destName or destName == "" then return false end
-
-    local me = UnitName("player")
-    if me and destName == me then return true end
-
-    -- party/raid (nombres sin realm normalmente, destName suele venir igual; si viene con realm, aún así
-    -- en la práctica muchas veces coincide; no lo fuerzo para no romper)
-    if IsInRaid() then
-        local n = GetNumGroupMembers()
-        for i = 1, n do
-            local unit = "raid" .. i
-            local name = UnitName(unit)
-            if name and destName == name then return true end
-        end
-    elseif IsInGroup() then
-        local n = GetNumSubgroupMembers()
-        for i = 1, n do
-            local unit = "party" .. i
-            local name = UnitName(unit)
-            if name and destName == name then return true end
-        end
-    end
-
-    -- pet
-    local pet = UnitName("pet")
-    if pet and destName == pet then return true end
-
-    return false
-end
-
-local function SafeSpellNameAndCastTime(spellId, fallbackName)
-    if spellId then
-        local name, _, _, castTimeMS = GetSpellInfo(spellId)
-        if name then
-            return name, (castTimeMS or 0)
-        end
-    end
-    return fallbackName or "Unknown", 0
 end
 
 -------------------------------------------------
 -- State
 -------------------------------------------------
 function EnemyCastList:Reset()
-    self.castsBySource = {}   -- [sourceGUID] = { sourceName, spellName, spellId, destName, startedAt, endsAt }
-    self.castOrder = {}       -- list of sourceGUID for stable iteration
+    self.units = {} -- [unit] = true
+    self.casts = {} -- [unit] = { spellName, casterName, targetName }
 end
 
-function EnemyCastList:RemoveCast(sourceGUID)
-    if not sourceGUID then return end
-    if self.castsBySource then
-        self.castsBySource[sourceGUID] = nil
+local function IsUnitValidHostile(self, unit)
+    if not UnitExists(unit) then return false end
+    if self.db.onlyHostile and UnitIsFriend("player", unit) then return false end
+    return true
+end
+
+local function IsTargetingPlayer(unit)
+    local tu = unit .. "target"
+    return UnitExists(tu) and UnitIsUnit(tu, "player")
+end
+
+local function TryGetUnitTargetName(unit, noTargetText)
+    local tu = unit .. "target"
+    if UnitExists(tu) then
+        local n = UnitName(tu)
+        if n then return n end
     end
+    return noTargetText or "(sin target)"
 end
 
-function EnemyCastList:CleanupExpired(now)
-    if not self.castsBySource then return end
-    now = now or GetTime()
+function EnemyCastList:ReadUnitCast(unit)
+    if not UnitExists(unit) then return nil end
 
-    for guid, c in pairs(self.castsBySource) do
-        if not c or not c.endsAt or c.endsAt <= now then
-            self.castsBySource[guid] = nil
+    local spellName = UnitCastingInfo(unit)
+    local isChannel = false
+
+    if not spellName and (self.db.showChannels ~= false) then
+        spellName = UnitChannelInfo(unit)
+        if spellName then isChannel = true end
+    end
+
+    if not spellName then return nil end
+
+    local casterName = UnitName(unit) or unit
+    local targetName = TryGetUnitTargetName(unit, self.db.noTargetText)
+
+    return {
+        unit = unit,
+        casterName = casterName,
+        spellName = spellName,
+        targetName = targetName,
+        isChannel = isChannel,
+
+        -- ✅ lo guardamos para decidir alpha en render
+        targetingMe = IsTargetingPlayer(unit),
+    }
+end
+
+function EnemyCastList:RefreshAll()
+    for unit, _ in pairs(self.units) do
+        if UnitExists(unit) and IsUnitValidHostile(self, unit) then
+            local c = self:ReadUnitCast(unit)
+            if c then
+                self.casts[unit] = c
+            else
+                self.casts[unit] = nil
+            end
+        else
+            self.casts[unit] = nil
         end
     end
 end
 
-local function SortCasts(a, b)
-    -- a/b son tablas cast
-    if not a or not b then return false end
-    local ea = a.endsAt or 0
-    local eb = b.endsAt or 0
-    if ea == eb then
-        return (a.startedAt or 0) > (b.startedAt or 0)
-    end
-    return ea < eb
-end
-
 -------------------------------------------------
--- UI Update
+-- Rendering
 -------------------------------------------------
 function EnemyCastList:ShouldShow()
     if not self.db or self.db.enabled == false then return false end
@@ -245,37 +262,37 @@ function EnemyCastList:Update()
         return
     end
 
-    local now = GetTime()
-    self:CleanupExpired(now)
-
     local maxLines = tonumber(self.db.maxLines) or defaults.maxLines
     if maxLines < 1 then maxLines = 1 end
     if maxLines > 20 then maxLines = 20 end
 
-    -- Construir lista ordenada
     local list = {}
-    if self.castsBySource then
-        for _, c in pairs(self.castsBySource) do
-            if c then
-                list[#list + 1] = c
-            end
-        end
+    for _, c in pairs(self.casts or {}) do
+        if c then list[#list + 1] = c end
     end
-    table.sort(list, SortCasts)
 
     if #list == 0 then
         if self.db.debugAlwaysShow then
             self.frame:Show()
             for i = 1, maxLines do
                 local t = self.lines[i]
-                if t then
-                    if i == 1 then
-                        t:SetText("EnemyCastList: sin casteos")
-                        t:Show()
-                    else
-                        t:SetText("")
-                        t:Hide()
-                    end
+                local c = list[i]
+                if t and c then
+                    local msg = (c.spellName or "Unknown") ..
+                    " >> " .. (c.targetName or (self.db.noTargetText or "(sin target)"))
+                    msg = msg .. "  |cffaaaaaa(" .. (c.casterName or "?") .. ")|r"
+                    t:SetText(msg)
+
+                    local shouldShow = (self.db.onlyTargetingMe ~= true) or (c.targetingMe == true)
+                    local a1 = tonumber(self.db.alphaTargetingMe) or 1
+                    local a0 = tonumber(self.db.alphaNotTargetingMe) or 0
+                    t:AlphaFromBoolean(shouldShow, a1, a0)
+
+                    t:Show()
+                elseif t then
+                    t:SetText("")
+                    t:SetAlpha(1)
+                    t:Hide()
                 end
             end
         else
@@ -289,16 +306,10 @@ function EnemyCastList:Update()
     for i = 1, maxLines do
         local t = self.lines[i]
         local c = list[i]
-
         if t and c then
-            local msg = c.spellName or "Unknown"
-            if c.destName and c.destName ~= "" then
-                msg = msg .. " >> " .. c.destName
-            end
-            if c.sourceName and c.sourceName ~= "" then
-                msg = msg .. "  |cffaaaaaa(" .. c.sourceName .. ")|r"
-            end
-
+            local msg = (c.spellName or "Unknown") ..
+            " >> " .. (c.targetName or (self.db.noTargetText or "(sin target)"))
+            msg = msg .. "  |cffaaaaaa(" .. (c.casterName or "?") .. ")|r"
             t:SetText(msg)
             t:Show()
         elseif t then
@@ -317,6 +328,7 @@ function EnemyCastList:StartTicker()
     if interval < 0.02 then interval = 0.02 end
 
     BS:RegisterTicker(self, interval, function()
+        self:RefreshAll()
         self:Update()
     end)
 end
@@ -326,72 +338,17 @@ function EnemyCastList:StopTicker()
 end
 
 -------------------------------------------------
--- Combat log ingestion
--------------------------------------------------
-local function IsHostileSource(sourceFlags)
-    if not sourceFlags then return false end
-    -- Hostile reaction
-    if bit.band(sourceFlags, COMBATLOG_OBJECT_REACTION_HOSTILE) == 0 then
-        return false
-    end
-    return true
-end
-
-local function HandleCastStart(self, sourceGUID, sourceName, destName, spellId, spellNameFromLog)
-    if not sourceGUID or not sourceName then return end
-    if not self.db or self.db.enabled == false then return end
-
-    if self.db.onlyIfDestIsMeOrGroup then
-        if not IsDestMeOrGroup(destName) then
-            return
-        end
-    end
-
-    local safeName, castTimeMS = SafeSpellNameAndCastTime(spellId, spellNameFromLog)
-    local now = GetTime()
-    local endsAt = now + ((castTimeMS or 0) / 1000)
-
-    -- Si es instant (0ms), lo mostramos un pelín para que se vea en lista
-    if endsAt <= now then
-        endsAt = now + 0.75
-    end
-
-    self.castsBySource = self.castsBySource or {}
-    self.castsBySource[sourceGUID] = {
-        sourceGUID = sourceGUID,
-        sourceName = sourceName,
-        destName = destName,
-        spellId = spellId,
-        spellName = safeName,
-        startedAt = now,
-        endsAt = endsAt,
-    }
-end
-
-local function HandleCastStop(self, sourceGUID, spellId)
-    -- Eliminamos el cast activo del sourceGUID (si coincide o si no nos importa spellId)
-    if not sourceGUID then return end
-    if not self.castsBySource or not self.castsBySource[sourceGUID] then return end
-
-    -- si viene spellId, intentamos coincidir para no borrar otro cast "nuevo"
-    if spellId and self.castsBySource[sourceGUID].spellId and self.castsBySource[sourceGUID].spellId ~= spellId then
-        return
-    end
-
-    self.castsBySource[sourceGUID] = nil
-end
-
--------------------------------------------------
 -- Public hooks for Config UI
 -------------------------------------------------
 function EnemyCastList:ApplyOptions()
     EnsureUI(self)
     ApplyPosition(self)
-    ApplySize(self)
+    ApplySizeAndLayout(self)
     ApplyFont(self)
 
     if self.enabled then
         self:StartTicker()
+        self:RefreshAll()
         self:Update()
     else
         if self.frame then self.frame:Hide() end
@@ -408,7 +365,7 @@ function EnemyCastList:OnInit()
 
     EnsureUI(self)
     ApplyPosition(self)
-    ApplySize(self)
+    ApplySizeAndLayout(self)
     ApplyFont(self)
 
     self:Reset()
@@ -417,65 +374,42 @@ function EnemyCastList:OnInit()
 
     if self.enabled then
         self:StartTicker()
+        self:RefreshAll()
         self:Update()
     else
         self.frame:Hide()
         self:StopTicker()
     end
 
-    -- Eventos
-    BS:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-    BS:RegisterEvent("PLAYER_REGEN_ENABLED")   -- para limpiar al salir de combate
-    BS:RegisterEvent("PLAYER_REGEN_DISABLED")  -- opcional: update inmediato al entrar
+    self:EnsureEventFrame()
+    self:UnregisterAllLocalEvents()
+
+    self:RegisterLocalEvent("NAME_PLATE_UNIT_ADDED")
+    self:RegisterLocalEvent("NAME_PLATE_UNIT_REMOVED")
 end
 
 -------------------------------------------------
--- Events (BS dispatcher)
+-- Events
 -------------------------------------------------
-EnemyCastList.events.PLAYER_REGEN_DISABLED = function(self)
+EnemyCastList.events.NAME_PLATE_UNIT_ADDED = function(self, unit)
     if not self.enabled then return end
+    if not unit then return end
+    if not IsUnitValidHostile(self, unit) then return end
+
+    self.units[unit] = true
+
+    local c = self:ReadUnitCast(unit)
+    if c then self.casts[unit] = c end
+
     self:Update()
 end
 
-EnemyCastList.events.PLAYER_REGEN_ENABLED = function(self)
+EnemyCastList.events.NAME_PLATE_UNIT_REMOVED = function(self, unit)
     if not self.enabled then return end
-    -- limpia casts al salir de combate para evitar “fantasmas”
-    self:Reset()
+    if not unit then return end
+
+    self.units[unit] = nil
+    self.casts[unit] = nil
+
     self:Update()
-end
-
-EnemyCastList.events.COMBAT_LOG_EVENT_UNFILTERED = function(self)
-    if not self.enabled then return end
-    if not self.db or self.db.enabled == false then return end
-
-    -- Si solo queremos cuando el player está en combate, ni procesamos
-    if self.db.onlyWhilePlayerInCombat and not UnitAffectingCombat("player") then
-        return
-    end
-
-    local ts, subEvent,
-        hideCaster,
-        sourceGUID, sourceName, sourceFlags, sourceRaidFlags,
-        destGUID, destName, destFlags, destRaidFlags,
-        spellId, spellName = CombatLogGetCurrentEventInfo()
-
-    if not subEvent then return end
-    if not sourceGUID or not sourceName then return end
-    if not IsHostileSource(sourceFlags) then return end
-
-    -- Capturamos inicios y finalizaciones razonables
-    if subEvent == "SPELL_CAST_START" then
-        HandleCastStart(self, sourceGUID, sourceName, destName, spellId, spellName)
-        -- no hacemos Update aquí (coste); el ticker refresca. Si lo quieres instantáneo:
-        -- self:Update()
-
-    elseif subEvent == "SPELL_CAST_FAILED"
-        or subEvent == "SPELL_INTERRUPT"
-        or subEvent == "SPELL_CAST_SUCCESS"
-    then
-        -- Para casts normales: SUCCESS suele llegar al final (o instant). Para channels puede variar,
-        -- pero esto limpia bastante bien.
-        HandleCastStop(self, sourceGUID, spellId)
-        -- self:Update()
-    end
 end
