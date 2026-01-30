@@ -135,7 +135,7 @@ end
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 
 local function ColorizeText(text, color)
-    if not text or text == "" or not color then return text end
+    if not text or not color then return text end
 
     if color.colorStr then
         return "|c" .. color.colorStr .. text .. "|r"
@@ -152,7 +152,7 @@ local function GetUnitNameColoredByClass(unit)
     local name = UnitName(unit)
     if not name then return nil end
 
-    local _, classTag = UnitClass(unit) -- e.g. "MAGE"
+    local _, classTag = UnitClass(unit)
     if classTag and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classTag] then
         return ColorizeText(name, RAID_CLASS_COLORS[classTag])
     end
@@ -319,7 +319,7 @@ function FocusCastTracker:Update()
     else
         msg = self.castInfo.name
         if self.castInfo.targetName then
-            msg = msg .. " -> " .. self.castInfo.targetName
+            msg = msg .. " >> " .. self.castInfo.targetName
         end
     end
 
