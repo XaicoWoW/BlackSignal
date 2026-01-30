@@ -17,7 +17,7 @@ Core/UI/UI.lua
 Core/Config/Config.lua
 
 
-Modules/Shimmer.lua
-Modules/FocusCastTracker.lua
+Modules/Shimmer/Shimmer.lua
+Modules/FocusCastTracker/FocusCastTracker.lua
 Modules/AutoQueue/AutoQueue.lua
-Modules/MouseRing.lua
+Modules/MouseRing/MouseRing.lua
