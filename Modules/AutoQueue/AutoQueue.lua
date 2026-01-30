@@ -27,8 +27,8 @@ AutoQueue.defaults = defaults
 -- DB
 -------------------------------------------------
 local function EnsureDB()
-  _G.BS_DB = _G.BS_DB or {}
-  local db = _G.BS_DB
+  _G.BlackSignal = _G.BlackSignal or {}
+  local db = _G.BlackSignal
 
   db.profile = db.profile or {}
   db.profile.modules = db.profile.modules or {}
