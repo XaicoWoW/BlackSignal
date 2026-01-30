@@ -1,4 +1,4 @@
- -- Core/Config.lua
+-- Core/Config.lua
 local BS = _G.BS or {}
 _G.BS = BS
 BS.modules = BS.modules or {}
@@ -62,10 +62,10 @@ local function GetAvailableFonts()
         end
     end
 
+    -- 2) BS.Fonts registry
     do
         local reg = BS.Fonts
         if type(reg) == "table" then
-            -- map form
             local isArray = (#reg > 0)
             if isArray then
                 for _, it in ipairs(reg) do
@@ -142,21 +142,63 @@ local function SetDropdownSelectionByValue(dd, value, items)
 end
 
 -------------------------------------------------
--- Module apply helpers
+-- Capability detection (important!)
+-------------------------------------------------
+local function HasKey(t, k)
+    return type(t) == "table" and t[k] ~= nil
+end
+
+local function SupportsPosition(module, defaults)
+    -- Position only makes sense if a frame exists OR module explicitly uses x/y in defaults/db
+    if module and module.frame then return true end
+    if HasKey(defaults, "x") or HasKey(defaults, "y") then return true end
+    if module and module.db and (HasKey(module.db, "x") or HasKey(module.db, "y")) then return true end
+    return false
+end
+
+local function SupportsFont(module, defaults)
+    -- Font controls only make sense if module has a FontString (module.text) OR defaults/db declare font fields
+    if module and module.text and module.text.SetFont then return true end
+    if HasKey(defaults, "font") or HasKey(defaults, "fontSize") or HasKey(defaults, "fontFlags") then return true end
+    return false
+end
+
+local function SupportsTextField(module, defaults)
+    -- Only show "Text:" input if module declares it (defaults/db). Avoid forcing it on modules like AutoQueue.
+    if HasKey(defaults, "text") then return true end
+    if module and module.db and HasKey(module.db, "text") then return true end
+    return false
+end
+
+local function EnsureFontDefaults(module, defaults)
+    module.db = module.db or {}
+    if module.db.font == nil then
+        module.db.font = NormalizeFontPath(defaults and defaults.font) or "Fonts\\FRIZQT__.TTF"
+    end
+    if module.db.fontSize == nil and defaults and defaults.fontSize ~= nil then
+        module.db.fontSize = defaults.fontSize
+    end
+    if module.db.fontFlags == nil and defaults and defaults.fontFlags ~= nil then
+        module.db.fontFlags = defaults.fontFlags
+    end
+end
+
+-------------------------------------------------
+-- Module apply helpers (guarded)
 -------------------------------------------------
 local function ApplyModulePosition(module)
     if not module or not module.frame or not module.db then return end
+    local x = tonumber(module.db.x or 0) or 0
+    local y = tonumber(module.db.y or 0) or 0
     module.frame:ClearAllPoints()
-    module.frame:SetPoint("CENTER", UIParent, "CENTER", module.db.x or 0, module.db.y or 0)
+    module.frame:SetPoint("CENTER", UIParent, "CENTER", x, y)
 end
 
 local function ApplyModuleFont(module)
-    if not module or not module.text or not module.db then return end
-
+    if not module or not module.text or not module.text.SetFont or not module.db then return end
     local size = tonumber(module.db.fontSize) or 20
     local font = NormalizeFontPath(module.db.font) or "Fonts\\FRIZQT__.TTF"
     local flags = module.db.fontFlags or "OUTLINE"
-
     module.text:SetFont(font, size, flags)
 end
 
@@ -181,7 +223,7 @@ local function SetModuleEnabled(module, enabled)
     enabled = enabled and true or false
 
     module.enabled = enabled
-    module.db.enabled = enabled
+    if module.db then module.db.enabled = enabled end
 
     if enabled and module.OnInit then
         module:OnInit()
@@ -228,10 +270,18 @@ end
 -- Content factory
 -------------------------------------------------
 local function CreateModuleContent(parent, module)
-    local defaults = DB:BuildDefaults(module)
+    local defaults = DB:BuildDefaults(module) or {}
 
     module.db = module.db or DB:EnsureModuleDB(module.name, defaults)
     if module.enabled == nil then module.enabled = module.db.enabled end
+
+    local canPos  = SupportsPosition(module, defaults)
+    local canFont = SupportsFont(module, defaults)
+    local canText = SupportsTextField(module, defaults)
+
+    if canFont then
+        EnsureFontDefaults(module, defaults)
+    end
 
     local f = CreateFrame("Frame", nil, parent)
     f:SetAllPoints()
@@ -251,141 +301,100 @@ local function CreateModuleContent(parent, module)
         if self._bsSync then self._bsSync() end
     end)
 
-    -- X / Y
-    local xLabel = UI:CreateText(f, "X:", "TOPLEFT", enable, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-    local xEdit = UI:CreateEditBox(f, 70, 20, "LEFT", xLabel, "RIGHT", 10, 0)
-    xEdit:SetText(tostring(module.db.x or 0))
+    local lastAnchor = enable
 
-    local yLabel = UI:CreateText(f, "Y:", "TOPLEFT", xLabel, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-    local yEdit = UI:CreateEditBox(f, 70, 20, "LEFT", yLabel, "RIGHT", 10, 0)
-    yEdit:SetText(tostring(module.db.y or 18))
+    -------------------------------------------------
+    -- Position (optional)
+    -------------------------------------------------
+    local xEdit, yEdit
+    if canPos then
+        local xLabel = UI:CreateText(f, "X:", "TOPLEFT", enable, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        xEdit = UI:CreateEditBox(f, 70, 20, "LEFT", xLabel, "RIGHT", 10, 0)
+        xEdit:SetText(tostring(module.db.x or 0))
 
-    local function CommitXY()
-        local xVal = tonumber(xEdit:GetText())
-        local yVal = tonumber(yEdit:GetText())
-        if xVal ~= nil then module.db.x = xVal end
-        if yVal ~= nil then module.db.y = yVal end
-        ApplyModulePosition(module)
-    end
+        local yLabel = UI:CreateText(f, "Y:", "TOPLEFT", xLabel, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        yEdit = UI:CreateEditBox(f, 70, 20, "LEFT", yLabel, "RIGHT", 10, 0)
+        yEdit:SetText(tostring(module.db.y or 0))
 
-    xEdit:SetScript("OnEnterPressed", function(self)
-        CommitXY(); self:ClearFocus()
-    end)
-    yEdit:SetScript("OnEnterPressed", function(self)
-        CommitXY(); self:ClearFocus()
-    end)
-
-    -- Font Size
-    local fontLabel = UI:CreateText(f, "Font Size:", "TOPLEFT", yLabel, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-    local fontEdit = UI:CreateEditBox(f, 70, 20, "LEFT", fontLabel, "RIGHT", 10, 0)
-    fontEdit:SetText(tostring(module.db.fontSize or 20))
-    fontEdit:SetScript("OnEnterPressed", function(self)
-        local v = tonumber(self:GetText())
-        if v and v >= 6 then
-            module.db.fontSize = v
-            ApplyModuleFont(module)
-            ApplyModuleExtra(module)
+        local function CommitXY()
+            local xVal = tonumber(xEdit:GetText())
+            local yVal = tonumber(yEdit:GetText())
+            if xVal ~= nil then module.db.x = xVal end
+            if yVal ~= nil then module.db.y = yVal end
+            ApplyModulePosition(module)
         end
-        self:ClearFocus()
-    end)
 
-    -- Font selector (dynamic)
-    local fonts = GetAvailableFonts()
-    local fontPickLabel = UI:CreateText(f, "Font:", "TOPLEFT", fontLabel, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        xEdit:SetScript("OnEnterPressed", function(self)
+            CommitXY(); self:ClearFocus()
+        end)
+        yEdit:SetScript("OnEnterPressed", function(self)
+            CommitXY(); self:ClearFocus()
+        end)
 
-    -- Ensure db.font exists with a sane default (prefer module default, else FRIZQT)
-    if module.db.font == nil then
-        module.db.font = NormalizeFontPath(defaults and defaults.font) or "Fonts\\FRIZQT__.TTF"
+        lastAnchor = yLabel
     end
 
-    local fontDD = CreateDropdown(f, 260, "LEFT", fontPickLabel, "RIGHT", 10, -2)
-    UIDropDownMenu_Initialize(fontDD, function(self, level)
-        local info = UIDropDownMenu_CreateInfo()
-        for _, it in ipairs(fonts) do
-            info.text = it.label
-            info.value = it.path
-            info.func = function()
-                module.db.font = it.path
-                SetDropdownSelectionByValue(fontDD, module.db.font, fonts)
+    -------------------------------------------------
+    -- Font controls (optional)
+    -------------------------------------------------
+    local fontEdit, fontDD, fonts
+    if canFont then
+        local fontLabel = UI:CreateText(f, "Font Size:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        fontEdit = UI:CreateEditBox(f, 70, 20, "LEFT", fontLabel, "RIGHT", 10, 0)
+        fontEdit:SetText(tostring(module.db.fontSize or 20))
+        fontEdit:SetScript("OnEnterPressed", function(self)
+            local v = tonumber(self:GetText())
+            if v and v >= 6 then
+                module.db.fontSize = v
                 ApplyModuleFont(module)
                 ApplyModuleExtra(module)
             end
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end)
+            self:ClearFocus()
+        end)
 
-    SetDropdownSelectionByValue(fontDD, module.db.font, fonts)
+        fonts = GetAvailableFonts()
+        local fontPickLabel = UI:CreateText(f, "Font:", "TOPLEFT", fontLabel, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        fontDD = CreateDropdown(f, 260, "LEFT", fontPickLabel, "RIGHT", 10, -2)
 
-    -- Text
-    local textLabel = UI:CreateText(f, "Text:", "TOPLEFT", fontPickLabel, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-    local textEdit = UI:CreateEditBox(f, 360, 20, "LEFT", textLabel, "RIGHT", 10, 0)
-    textEdit:SetText(tostring(module.db.text or ""))
-    textEdit:SetScript("OnEnterPressed", function(self)
-        module.db.text = self:GetText() or ""
-        ApplyModuleText(module)
-        self:ClearFocus()
-    end)
+        UIDropDownMenu_Initialize(fontDD, function(self, level)
+            local info = UIDropDownMenu_CreateInfo()
+            for _, it in ipairs(fonts) do
+                info.text = it.label
+                info.value = it.path
+                info.func = function()
+                    module.db.font = it.path
+                    SetDropdownSelectionByValue(fontDD, module.db.font, fonts)
+                    ApplyModuleFont(module)
+                    ApplyModuleExtra(module)
+                end
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end)
 
-    local lastAnchor = textLabel
+        SetDropdownSelectionByValue(fontDD, module.db.font, fonts)
+
+        lastAnchor = fontPickLabel
+    end
+
+    -------------------------------------------------
+    -- Text field (optional)
+    -------------------------------------------------
+    local textEdit
+    if canText then
+        local textLabel = UI:CreateText(f, "Text:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        textEdit = UI:CreateEditBox(f, 360, 20, "LEFT", textLabel, "RIGHT", 10, 0)
+        textEdit:SetText(tostring(module.db.text or ""))
+        textEdit:SetScript("OnEnterPressed", function(self)
+            module.db.text = self:GetText() or ""
+            ApplyModuleText(module)
+            self:ClearFocus()
+        end)
+        lastAnchor = textLabel
+    end
 
     -------------------------------------------------
     -- Optional controls (auto-render based on db keys)
     -------------------------------------------------
-
-    if module.db.showOnlyBuffICanApply ~= nil then
-        local cb = UI:CreateCheck(f, "Show only buff I can apply", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14)
-        cb:SetChecked(module.db.showOnlyBuffICanApply == true)
-        UI:ApplyMinimalCheckStyle(cb)
-        cb:SetScript("OnClick", function(self)
-            module.db.showOnlyBuffICanApply = self:GetChecked() and true or false
-            ApplyModuleExtra(module)
-            if self._bsSync then self._bsSync() end
-        end)
-        lastAnchor = cb
-    end
-
-    if module.db.iconsOnly ~= nil then
-        local cb = UI:CreateCheck(f, "Icons only", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14)
-        cb:SetChecked(module.db.iconsOnly == true)
-        UI:ApplyMinimalCheckStyle(cb)
-        cb:SetScript("OnClick", function(self)
-            module.db.iconsOnly = self:GetChecked() and true or false
-            ApplyModuleExtra(module)
-            if self._bsSync then self._bsSync() end
-        end)
-        lastAnchor = cb
-    end
-
-    if module.db.iconSize ~= nil then
-        local lbl = UI:CreateText(f, "Icon Size:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-        local eb = UI:CreateEditBox(f, 70, 20, "LEFT", lbl, "RIGHT", 10, 0)
-        eb:SetText(tostring(module.db.iconSize or 20))
-        eb:SetScript("OnEnterPressed", function(self)
-            local v = tonumber(self:GetText())
-            if v and v >= 8 and v <= 64 then
-                module.db.iconSize = v
-                ApplyModuleExtra(module)
-            end
-            self:ClearFocus()
-        end)
-        lastAnchor = lbl
-    end
-
-    if module.db.iconGap ~= nil then
-        local lbl = UI:CreateText(f, "Icon Gap:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-        local eb = UI:CreateEditBox(f, 70, 20, "LEFT", lbl, "RIGHT", 10, 0)
-        eb:SetText(tostring(module.db.iconGap or 6))
-        eb:SetScript("OnEnterPressed", function(self)
-            local v = tonumber(self:GetText())
-            if v and v >= 0 and v <= 40 then
-                module.db.iconGap = v
-                ApplyModuleExtra(module)
-            end
-            self:ClearFocus()
-        end)
-        lastAnchor = lbl
-    end
-
     if module.db.updateInterval ~= nil then
         local lbl = UI:CreateText(f, "Update Interval (s):", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
         local eb = UI:CreateEditBox(f, 70, 20, "LEFT", lbl, "RIGHT", 10, 0)
@@ -396,33 +405,6 @@ local function CreateModuleContent(parent, module)
                 module.db.updateInterval = v
                 if module.StopTicker then module:StopTicker() end
                 if module.StartTicker then module:StartTicker() end
-                ApplyModuleExtra(module)
-            end
-            self:ClearFocus()
-        end)
-        lastAnchor = lbl
-    end
-
-    if module.db.showWhenSolo ~= nil then
-        local cb = UI:CreateCheck(f, "Show when solo", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14)
-        cb:SetChecked(module.db.showWhenSolo == true)
-        UI:ApplyMinimalCheckStyle(cb)
-        cb:SetScript("OnClick", function(self)
-            module.db.showWhenSolo = self:GetChecked() and true or false
-            ApplyModuleExtra(module)
-            if self._bsSync then self._bsSync() end
-        end)
-        lastAnchor = cb
-    end
-
-    if module.db.maxNames ~= nil then
-        local lbl = UI:CreateText(f, "Max Names (text):", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-        local eb = UI:CreateEditBox(f, 70, 20, "LEFT", lbl, "RIGHT", 10, 0)
-        eb:SetText(tostring(module.db.maxNames or 6))
-        eb:SetScript("OnEnterPressed", function(self)
-            local v = tonumber(self:GetText())
-            if v and v >= 1 and v <= 40 then
-                module.db.maxNames = math.floor(v)
                 ApplyModuleExtra(module)
             end
             self:ClearFocus()
@@ -486,7 +468,7 @@ local function CreateModuleContent(parent, module)
             "GameFontHighlight"
         )
 
-        local picker = UI:CreateColorPicker(
+        UI:CreateColorPicker(
             f, 26, 26,
             "LEFT", lbl, "RIGHT", 10, 0,
             function()
@@ -509,54 +491,58 @@ local function CreateModuleContent(parent, module)
         lastAnchor = lbl
     end
 
-
     -------------------------------------------------
-    -- Reset
+    -- Reset (capability-aware)
     -------------------------------------------------
     local reset = UI:CreateButton(f, "Reset Defaults", 140, 24, "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -18)
     reset:SetScript("OnClick", function()
-        local d = DB:BuildDefaults(module)
+        local d = DB:BuildDefaults(module) or {}
 
-        module.db.x = d.x or 0
-        module.db.y = d.y or 18
-        module.db.fontSize = d.fontSize or 20
-        module.db.text = d.text or ""
-        module.db.enabled = d.enabled ~= false
+        -- Always reset enabled if present
+        if d.enabled ~= nil then
+            module.db.enabled = (d.enabled ~= false)
+        else
+            module.db.enabled = (module.db.enabled ~= false)
+        end
         module.enabled = module.db.enabled
 
-        -- Font default (important)
-        module.db.font = NormalizeFontPath(d.font) or module.db.font or "Fonts\\FRIZQT__.TTF"
+        -- Only reset fields that exist for this module
+        if canPos then
+            module.db.x = d.x or 0
+            module.db.y = d.y or 0
+            if xEdit then xEdit:SetText(tostring(module.db.x)) end
+            if yEdit then yEdit:SetText(tostring(module.db.y)) end
+            ApplyModulePosition(module)
+        end
 
+        if canFont then
+            module.db.fontSize = d.fontSize or module.db.fontSize or 20
+            module.db.font = NormalizeFontPath(d.font) or module.db.font or "Fonts\\FRIZQT__.TTF"
+            if d.fontFlags ~= nil then module.db.fontFlags = d.fontFlags end
+            if fontEdit then fontEdit:SetText(tostring(module.db.fontSize)) end
+
+            -- refresh dropdown list + selection (in case LSM loaded late)
+            fonts = GetAvailableFonts()
+            if fontDD then SetDropdownSelectionByValue(fontDD, module.db.font, fonts) end
+
+            ApplyModuleFont(module)
+        end
+
+        if canText then
+            module.db.text = d.text or ""
+            if textEdit then textEdit:SetText(tostring(module.db.text)) end
+            ApplyModuleText(module)
+        end
+
+        -- Optional known fields
         if d.iconsOnly ~= nil then module.db.iconsOnly = d.iconsOnly end
         if d.iconSize ~= nil then module.db.iconSize = d.iconSize end
         if d.iconGap ~= nil then module.db.iconGap = d.iconGap end
         if d.updateInterval ~= nil then module.db.updateInterval = d.updateInterval end
-        if d.showWhenSolo ~= nil then module.db.showWhenSolo = d.showWhenSolo end
-        if d.maxNames ~= nil then module.db.maxNames = d.maxNames end
         if d.showOnlyBuffICanApply ~= nil then module.db.showOnlyBuffICanApply = d.showOnlyBuffICanApply end
         if d.onlyShowIfKickReady ~= nil then module.db.onlyShowIfKickReady = d.onlyShowIfKickReady end
         if d.kickSpellIdOverride ~= nil then module.db.kickSpellIdOverride = d.kickSpellIdOverride end
         if d.debugAlwaysShow ~= nil then module.db.debugAlwaysShow = d.debugAlwaysShow end
-
-        xEdit:SetText(tostring(module.db.x))
-        yEdit:SetText(tostring(module.db.y))
-        fontEdit:SetText(tostring(module.db.fontSize))
-        textEdit:SetText(tostring(module.db.text))
-
-        -- refresh dropdown list + selection (in case LSM loaded late)
-        fonts = GetAvailableFonts()
-        SetDropdownSelectionByValue(fontDD, module.db.font, fonts)
-
-        enable:SetChecked(module.enabled)
-        if enable._bsSync then enable._bsSync() end
-
-        if module.frame then module.frame:SetShown(module.enabled) end
-
-        ApplyModulePosition(module)
-        ApplyModuleFont(module)
-
-        if module.StopTicker then module:StopTicker() end
-        if module.StartTicker and module.enabled ~= false then module:StartTicker() end
 
         if d.colorPicker then
             module.db.ringColorR = d.ringColorR
@@ -564,6 +550,14 @@ local function CreateModuleContent(parent, module)
             module.db.ringColorB = d.ringColorB
             module.db.ringAlpha  = d.ringAlpha
         end
+
+        enable:SetChecked(module.enabled)
+        if enable._bsSync then enable._bsSync() end
+
+        if module.frame then module.frame:SetShown(module.enabled) end
+
+        if module.StopTicker then module:StopTicker() end
+        if module.StartTicker and module.enabled ~= false then module:StartTicker() end
 
         ApplyModuleExtra(module)
     end)
@@ -636,9 +630,8 @@ local function BuildUI()
     f:SetBackdropColor(0, 0, 0, 0.75)
     f:SetBackdropBorderColor(0, 0, 0, 1)
 
--- Title + Icon 
-
-    local iconPath =  "Interface\\AddOns\\BlackSignal\\Media\\icon_64.tga"
+    -- Title + Icon
+    local iconPath = "Interface\\AddOns\\BlackSignal\\Media\\icon_64.tga"
     local icon = f:CreateTexture(nil, "ARTWORK")
     icon:SetSize(32, 32)
     icon:SetTexture(iconPath)
@@ -738,7 +731,7 @@ SLASH_BS1 = "/bs"
 SlashCmdList["BS"] = function(msg)
     msg = (msg or ""):match("^%s*(.-)%s*$") -- trim
 
-    -- Sin args -> abre/cierra config
+    -- no args -> open/close
     if msg == "" then
         ToggleConfig()
         return
@@ -748,7 +741,6 @@ SlashCmdList["BS"] = function(msg)
     cmd = (cmd or ""):lower()
     rest = rest or ""
 
-    -- Subcomandos
     if cmd == "config" then
         ToggleConfig()
         return
@@ -768,26 +760,33 @@ SlashCmdList["BS"] = function(msg)
 end
 
 -------------------------------------------------
--- Apply enabled state on login
+-- Apply enabled state on login (capability-aware)
 -------------------------------------------------
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
     for _, m in pairs(BS.modules) do
         if type(m) == "table" and m.name then
-            m.db = m.db or DB:EnsureModuleDB(m.name, DB:BuildDefaults(m))
+            local d = DB:BuildDefaults(m) or {}
+            m.db = m.db or DB:EnsureModuleDB(m.name, d)
             if m.enabled == nil then m.enabled = m.db.enabled end
 
-            -- ensure font exists
-            if m.db.font == nil then
-                local d = DB:BuildDefaults(m)
-                m.db.font = NormalizeFontPath(d and d.font) or "Fonts\\FRIZQT__.TTF"
+            -- Only ensure font defaults when module supports fonts
+            if SupportsFont(m, d) then
+                EnsureFontDefaults(m, d)
             end
 
             if m.frame then
                 m.frame:SetShown(m.enabled ~= false)
-                ApplyModulePosition(m)
-                ApplyModuleFont(m)
+
+                if SupportsPosition(m, d) then
+                    ApplyModulePosition(m)
+                end
+
+                if SupportsFont(m, d) then
+                    ApplyModuleFont(m)
+                end
+
                 ApplyModuleText(m)
             end
         end

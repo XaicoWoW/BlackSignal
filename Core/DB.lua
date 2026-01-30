@@ -31,11 +31,6 @@ function DB:BuildDefaults(module)
 
     return {
         enabled  = module.enabled ~= false,
-        x        = 0,
-        y        = 0,
-        fontSize = 16,
-        font     = "Fonts\\FRIZQT__.TTF",
-        text     = "",
     }
 end
 
@@ -78,12 +73,6 @@ function DB:ApplyModuleState(module)
             module.frame:ClearAllPoints()
             module.frame:SetPoint("CENTER", UIParent, "CENTER", module.db.x or 0, module.db.y or 0)
         end
-    end
-
-    if module.text and module.text.SetFont then
-        local size = tonumber(module.db.fontSize) or 16
-        local font = module.db.font or "Fonts\\FRIZQT__.TTF"
-        module.text:SetFont(font, size, "OUTLINE")
     end
 
     if module.Update then

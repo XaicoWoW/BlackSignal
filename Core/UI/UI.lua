@@ -17,20 +17,35 @@ function UI:CreateText(parent, text, point, rel, relPoint, x, y, template)
     return fs
 end
 
-function UI:CreateButton(parent, text, w, h, point, rel, relPoint, x, y)
+function UI:CreateButton(parent, text, w, h, point, rel, relPoint, x, y, styleOpts)
     local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     btn:SetSize(w, h)
     btn:SetPoint(point, rel, relPoint, x, y)
-    btn:SetText(text)
+    btn:SetText(text or "")
+
+    for _, region in ipairs({ btn:GetRegions() }) do
+        if region:IsObjectType("Texture") then
+            region:SetTexture(nil)
+        end
+    end
+
+    if self.ApplyNavButtonStyle then
+        self:ApplyNavButtonStyle(btn, styleOpts)
+    end
+
     return btn
 end
 
-function UI:CreateEditBox(parent, w, h, point, rel, relPoint, x, y)
+function UI:CreateEditBox(parent, w, h, point, rel, relPoint, x, y, styleOpts)
     local eb = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
     eb:SetSize(w, h)
     eb:SetPoint(point, rel, relPoint, x, y)
     eb:SetAutoFocus(false)
-    eb:SetFontObject("GameFontHighlightSmall")
+
+    if self.ApplyEditBoxStyle then
+        self:ApplyEditBoxStyle(eb, styleOpts)
+    end
+
     return eb
 end
 
@@ -54,7 +69,9 @@ function UI:ShowColorPicker(r, g, b, a, callback)
     -- Retail API moderno
     if ColorPickerFrame and ColorPickerFrame.SetupColorPickerAndShow then
         local info = {
-            r = r, g = g, b = b,
+            r = r,
+            g = g,
+            b = b,
             opacity = 1 - a,
             hasOpacity = true,
             swatchFunc = function()
@@ -98,7 +115,6 @@ function UI:ShowColorPicker(r, g, b, a, callback)
     ColorPickerFrame:Show()
 end
 
-
 -------------------------------------------------
 -- Panel style
 -------------------------------------------------
@@ -121,35 +137,79 @@ end
 -- Left-list button style (BackdropTemplate)
 -------------------------------------------------
 function UI:ApplyNavButtonStyle(btn, opts)
-    opts = opts or {}
-    local bgA = opts.bgA or 1
-    local hoverA = opts.hoverA or 0.55
-    local activeA = opts.activeA or 0.75
-    local borderA = opts.borderA or 1
+    opts           = opts or {}
+    local bgA      = opts.bgA or 1
+    local hoverA   = opts.hoverA or 0.55
+    local activeA  = opts.activeA or 0.75
+    local borderA  = opts.borderA or 1
     local edgeSize = opts.edgeSize or 1
     local paddingX = opts.paddingX or 10
-    local GRAY = 0.16
+    local GRAY     = 0.16
 
     btn:SetNormalFontObject("GameFontHighlightSmall")
     btn:SetHighlightFontObject("GameFontHighlightSmall")
     btn:SetDisabledFontObject("GameFontDisableSmall")
 
+    -- Kill UIPanelButtonTemplate textures (Left/Middle/Right etc.)
+    if btn.Left then btn.Left:Hide() end
+    if btn.Middle then btn.Middle:Hide() end
+    if btn.Right then btn.Right:Hide() end
     for _, region in ipairs({ btn:GetRegions() }) do
-        if region:IsObjectType("Texture") then
+        if region and region:IsObjectType("Texture") then
             region:SetTexture(nil)
         end
     end
 
-    btn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false,
-        edgeSize = edgeSize,
-        insets = { left = edgeSize, right = edgeSize, top = edgeSize, bottom = edgeSize },
-    })
-    btn:SetBackdropBorderColor(0, 0, 0, borderA)
-    btn:SetBackdropColor(GRAY, GRAY, GRAY, bgA)
+    -- -------------------------
+    -- Background (texture-based)
+    -- -------------------------
+    btn._bs = btn._bs or {}
 
+    if not btn._bs.bgTex then
+        local bg = btn:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(btn)
+        btn._bs.bgTex = bg
+    end
+    btn._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, bgA)
+
+    -- -------------------------
+    -- Border (4 textures)
+    -- -------------------------
+    if not btn._bs.border then
+        local b = {}
+        b.top = btn:CreateTexture(nil, "BORDER")
+        b.bottom = btn:CreateTexture(nil, "BORDER")
+        b.left = btn:CreateTexture(nil, "BORDER")
+        b.right = btn:CreateTexture(nil, "BORDER")
+
+        btn._bs.border = b
+    end
+
+    local b = btn._bs.border
+    local es = edgeSize
+
+    b.top:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+    b.top:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
+    b.top:SetHeight(es)
+
+    b.bottom:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+    b.bottom:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+    b.bottom:SetHeight(es)
+
+    b.left:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+    b.left:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+    b.left:SetWidth(es)
+
+    b.right:SetPoint("TOPRIGHT", btn, "TOPRIGHT", 0, 0)
+    b.right:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+    b.right:SetWidth(es)
+
+    for _, t in pairs(b) do
+        t:SetColorTexture(0, 0, 0, borderA)
+        t:Show()
+    end
+
+    -- Text alignment / padding
     local fs = btn:GetFontString()
     if fs then
         fs:SetJustifyH("LEFT")
@@ -158,31 +218,114 @@ function UI:ApplyNavButtonStyle(btn, opts)
         fs:SetTextColor(1, 1, 1, 1)
     end
 
-    btn._bs = btn._bs or {}
     btn._bs.bgA = bgA
     btn._bs.hoverA = hoverA
     btn._bs.activeA = activeA
 
     btn:SetScript("OnEnter", function(self)
         if not self._bsActive then
-            self:SetBackdropColor(0, 0, 0, self._bs.hoverA)
+            self._bs.bgTex:SetColorTexture(0, 0, 0, self._bs.hoverA)
         end
     end)
 
     btn:SetScript("OnLeave", function(self)
         if not self._bsActive then
-            self:SetBackdropColor(0, 0, 0, self._bs.bgA)
+            self._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, self._bs.bgA)
         end
     end)
 
     function btn:SetBSActive(active)
         self._bsActive = active and true or false
         if self._bsActive then
-            self:SetBackdropColor(0, 0, 0, self._bs.activeA)
+            self._bs.bgTex:SetColorTexture(0, 0, 0, self._bs.activeA)
         else
-            self:SetBackdropColor(0, 0, 0, self._bs.bgA)
+            self._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, self._bs.bgA)
         end
     end
+end
+
+function UI:ApplyEditBoxStyle(eb, opts)
+    opts           = opts or {}
+
+    local bgA      = opts.bgA or 0.85
+    local focusA   = opts.focusA or 1
+    local borderA  = opts.borderA or 1
+    local edgeSize = opts.edgeSize or 1
+    local paddingX = opts.paddingX or 6
+    local paddingY = opts.paddingY or 0
+    local GRAY     = 0.16
+
+    eb:SetFontObject("GameFontHighlightSmall")
+    eb:SetTextInsets(paddingX, paddingX, paddingY, paddingY)
+
+    -- Kill InputBoxTemplate textures
+    if eb.Left then eb.Left:Hide() end
+    if eb.Middle then eb.Middle:Hide() end
+    if eb.Right then eb.Right:Hide() end
+    for _, region in ipairs({ eb:GetRegions() }) do
+        if region and region:IsObjectType("Texture") then
+            region:SetTexture(nil)
+        end
+    end
+
+    eb._bs = eb._bs or {}
+
+    -- -------------------------
+    -- Background
+    -- -------------------------
+    if not eb._bs.bgTex then
+        local bg = eb:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(eb)
+        eb._bs.bgTex = bg
+    end
+    eb._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, bgA)
+
+    -- -------------------------
+    -- Border
+    -- -------------------------
+    if not eb._bs.border then
+        local b = {}
+        b.top = eb:CreateTexture(nil, "BORDER")
+        b.bottom = eb:CreateTexture(nil, "BORDER")
+        b.left = eb:CreateTexture(nil, "BORDER")
+        b.right = eb:CreateTexture(nil, "BORDER")
+        eb._bs.border = b
+    end
+
+    local b = eb._bs.border
+    local es = edgeSize
+
+    b.top:SetPoint("TOPLEFT", eb, "TOPLEFT", 0, 0)
+    b.top:SetPoint("TOPRIGHT", eb, "TOPRIGHT", 0, 0)
+    b.top:SetHeight(es)
+
+    b.bottom:SetPoint("BOTTOMLEFT", eb, "BOTTOMLEFT", 0, 0)
+    b.bottom:SetPoint("BOTTOMRIGHT", eb, "BOTTOMRIGHT", 0, 0)
+    b.bottom:SetHeight(es)
+
+    b.left:SetPoint("TOPLEFT", eb, "TOPLEFT", 0, 0)
+    b.left:SetPoint("BOTTOMLEFT", eb, "BOTTOMLEFT", 0, 0)
+    b.left:SetWidth(es)
+
+    b.right:SetPoint("TOPRIGHT", eb, "TOPRIGHT", 0, 0)
+    b.right:SetPoint("BOTTOMRIGHT", eb, "BOTTOMRIGHT", 0, 0)
+    b.right:SetWidth(es)
+
+    for _, t in pairs(b) do
+        t:SetColorTexture(0, 0, 0, borderA)
+        t:Show()
+    end
+
+    -- -------------------------
+    -- Focus handling
+    -- -------------------------
+    eb:SetScript("OnEditFocusGained", function(self)
+        self._bs.bgTex:SetColorTexture(0, 0, 0, focusA)
+    end)
+
+    eb:SetScript("OnEditFocusLost", function(self)
+        self._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, bgA)
+    end)
 end
 
 -------------------------------------------------
@@ -319,6 +462,5 @@ function UI:CreateColorPicker(parent, w, h, point, relativeTo, relativePoint, x,
     Refresh()
     return btn
 end
-
 
 return UI
