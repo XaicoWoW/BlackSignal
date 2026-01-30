@@ -245,18 +245,33 @@ function UI:ApplyNavButtonStyle(btn, opts)
 end
 
 function UI:ApplyEditBoxStyle(eb, opts)
-    opts           = opts or {}
+    opts               = opts or {}
 
-    local bgA      = opts.bgA or 0.85
-    local focusA   = opts.focusA or 1
-    local borderA  = opts.borderA or 1
-    local edgeSize = opts.edgeSize or 1
-    local paddingX = opts.paddingX or 6
-    local paddingY = opts.paddingY or 0
-    local GRAY     = 0.16
+    local bgA          = opts.bgA or 0.85
+    local focusA       = opts.focusA or 1
+    local borderA      = opts.borderA or 1
+    local edgeSize     = opts.edgeSize or 1
+    local paddingX     = opts.paddingX or 6
+    local paddingY     = opts.paddingY or 4
+
+    local caretW       = opts.caretW or 1
+    local caretA       = opts.caretA or 1
+
+    -- Cursor X offset:
+    -- OnCursorChanged's x is usually relative to the *text origin*, so add the left inset.
+    -- With Blizzard default font, an extra +1 px tends to align perfectly.
+    local caretXOffset = opts.caretXOffset
+    if caretXOffset == nil then caretXOffset = paddingX + 1 end
+
+    local GRAY = 0.16
 
     eb:SetFontObject("GameFontHighlightSmall")
+    eb:SetTextColor(1, 1, 1, 1)
+    eb:SetJustifyH("LEFT")
+    eb:SetJustifyV("MIDDLE")
     eb:SetTextInsets(paddingX, paddingX, paddingY, paddingY)
+    eb:SetAutoFocus(false)
+    eb:EnableKeyboard(true)
 
     -- Kill InputBoxTemplate textures
     if eb.Left then eb.Left:Hide() end
@@ -270,9 +285,7 @@ function UI:ApplyEditBoxStyle(eb, opts)
 
     eb._bs = eb._bs or {}
 
-    -- -------------------------
     -- Background
-    -- -------------------------
     if not eb._bs.bgTex then
         local bg = eb:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints(eb)
@@ -280,9 +293,7 @@ function UI:ApplyEditBoxStyle(eb, opts)
     end
     eb._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, bgA)
 
-    -- -------------------------
-    -- Border
-    -- -------------------------
+    -- Border (4 textures)
     if not eb._bs.border then
         local b = {}
         b.top = eb:CreateTexture(nil, "BORDER")
@@ -295,18 +306,22 @@ function UI:ApplyEditBoxStyle(eb, opts)
     local b = eb._bs.border
     local es = edgeSize
 
+    b.top:ClearAllPoints()
     b.top:SetPoint("TOPLEFT", eb, "TOPLEFT", 0, 0)
     b.top:SetPoint("TOPRIGHT", eb, "TOPRIGHT", 0, 0)
     b.top:SetHeight(es)
 
+    b.bottom:ClearAllPoints()
     b.bottom:SetPoint("BOTTOMLEFT", eb, "BOTTOMLEFT", 0, 0)
     b.bottom:SetPoint("BOTTOMRIGHT", eb, "BOTTOMRIGHT", 0, 0)
     b.bottom:SetHeight(es)
 
+    b.left:ClearAllPoints()
     b.left:SetPoint("TOPLEFT", eb, "TOPLEFT", 0, 0)
     b.left:SetPoint("BOTTOMLEFT", eb, "BOTTOMLEFT", 0, 0)
     b.left:SetWidth(es)
 
+    b.right:ClearAllPoints()
     b.right:SetPoint("TOPRIGHT", eb, "TOPRIGHT", 0, 0)
     b.right:SetPoint("BOTTOMRIGHT", eb, "BOTTOMRIGHT", 0, 0)
     b.right:SetWidth(es)
@@ -316,15 +331,51 @@ function UI:ApplyEditBoxStyle(eb, opts)
         t:Show()
     end
 
-    -- -------------------------
-    -- Focus handling
-    -- -------------------------
+    -- ✅ Custom caret (more visible than native one)
+    if not eb._bs.caret then
+        local caret = eb:CreateTexture(nil, "OVERLAY")
+        caret:SetColorTexture(1, 1, 1, caretA)
+        caret:Hide()
+        eb._bs.caret = caret
+    end
+
+    local function UpdateCaret(self, x, h)
+        local caret = self._bs and self._bs.caret
+        if not caret or not self:HasFocus() then return end
+
+        local height = (h and h > 0) and h or (self:GetHeight() - paddingY * 2)
+
+        -- Pixel-snap to avoid blur on odd UI scales
+        local px = math.floor((x or 0) + caretXOffset + 0.5)
+
+        caret:ClearAllPoints()
+        caret:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", px, paddingY)
+        caret:SetSize(caretW, height)
+        caret:Show()
+    end
+
     eb:SetScript("OnEditFocusGained", function(self)
         self._bs.bgTex:SetColorTexture(0, 0, 0, focusA)
+        self._bs.caret:Show()
+
+        -- Force immediate refresh
+        local pos = self:GetCursorPosition()
+        self:SetCursorPosition(pos)
     end)
 
     eb:SetScript("OnEditFocusLost", function(self)
         self._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, bgA)
+        self._bs.caret:Hide()
+    end)
+
+    eb:SetScript("OnCursorChanged", function(self, x, y, w, h)
+        UpdateCaret(self, x, h)
+    end)
+
+    -- Also update caret when text changes without cursor event (rare, but happens)
+    eb:HookScript("OnTextChanged", function(self)
+        local pos = self:GetCursorPosition()
+        self:SetCursorPosition(pos)
     end)
 end
 
