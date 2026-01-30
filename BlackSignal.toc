@@ -2,6 +2,7 @@
 ## Notes: User Quality of Life Improvements
 ## Author: Xaico, Gwydeon
 ## Version: 1.0
+## X-Wago-ID: QN53BPKB
 ## Interface: 120000, 120001
 ## IconTexture: Interface/AddOns/BlackSignal/Media/icon
 ## SavedVariables: BlackSignal
