@@ -178,7 +178,13 @@ end
 
 local function IsUnitValidHostile(self, unit)
     if not UnitExists(unit) then return false end
-    if self.db.onlyHostile and UnitIsFriend("player", unit) then return false end
+
+    if self.db.onlyHostile then
+        if not UnitCanAttack("player", unit) then
+            return false
+        end
+    end
+
     return true
 end
 
@@ -274,19 +280,26 @@ function EnemyCastList:Update()
     if #list == 0 then
         if self.db.debugAlwaysShow then
             self.frame:Show()
+            local a1 = tonumber(self.db.alphaTargetingMe) or 1
+            local a0 = tonumber(self.db.alphaNotTargetingMe) or 0
+            local onlyMe = (self.db.onlyTargetingMe == true)
+
             for i = 1, maxLines do
                 local t = self.lines[i]
                 local c = list[i]
                 if t and c then
                     local msg = (c.spellName or "Unknown") ..
-                    " >> " .. (c.targetName or (self.db.noTargetText or "(sin target)"))
+                        " >> " .. (c.targetName or (self.db.noTargetText or "(sin target)"))
                     msg = msg .. "  |cffaaaaaa(" .. (c.casterName or "?") .. ")|r"
                     t:SetText(msg)
 
-                    local shouldShow = (self.db.onlyTargetingMe ~= true) or (c.targetingMe == true)
-                    local a1 = tonumber(self.db.alphaTargetingMe) or 1
-                    local a0 = tonumber(self.db.alphaNotTargetingMe) or 0
-                    t:AlphaFromBoolean(shouldShow, a1, a0)
+                    local showLine = (not onlyMe) or (c.targetingMe == true)
+
+                    if t.SetAlphaFromBoolean then
+                        t:SetAlphaFromBoolean(showLine, a1, a0)
+                    else
+                        t:SetAlpha(showLine and a1 or a0)
+                    end
 
                     t:Show()
                 elseif t then
@@ -308,7 +321,7 @@ function EnemyCastList:Update()
         local c = list[i]
         if t and c then
             local msg = (c.spellName or "Unknown") ..
-            " >> " .. (c.targetName or (self.db.noTargetText or "(sin target)"))
+                " >> " .. (c.targetName or (self.db.noTargetText or "(sin target)"))
             msg = msg .. "  |cffaaaaaa(" .. (c.casterName or "?") .. ")|r"
             t:SetText(msg)
             t:Show()
