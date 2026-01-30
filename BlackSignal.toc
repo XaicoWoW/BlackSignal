@@ -4,7 +4,7 @@
 ## Version: 1.0
 ## Interface: 120000, 120001
 ## IconTexture: Interface/AddOns/BlackSignal/Media/icon
-## SavedVariables: BlackSignal_DB
+## SavedVariables: BlackSignal
 
 
 Core/Init.lua
