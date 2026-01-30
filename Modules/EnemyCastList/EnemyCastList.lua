@@ -316,6 +316,10 @@ function EnemyCastList:Update()
 
     self.frame:Show()
 
+    local a1 = tonumber(self.db.alphaTargetingMe) or 1
+    local a0 = tonumber(self.db.alphaNotTargetingMe) or 0
+    local onlyMe = (self.db.onlyTargetingMe == true)
+
     for i = 1, maxLines do
         local t = self.lines[i]
         local c = list[i]
@@ -324,9 +328,17 @@ function EnemyCastList:Update()
                 " >> " .. (c.targetName or (self.db.noTargetText or "(sin target)"))
             msg = msg .. "  |cffaaaaaa(" .. (c.casterName or "?") .. ")|r"
             t:SetText(msg)
+
+            if onlyMe and t.SetAlphaFromBoolean then
+                t:SetAlphaFromBoolean(c.targetingMe, a1, a0)
+            else
+                t:SetAlpha(c.targetingMe and a1 or a0)
+            end
+
             t:Show()
         elseif t then
             t:SetText("")
+            t:SetAlpha(1)
             t:Hide()
         end
     end
