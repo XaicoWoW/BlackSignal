@@ -414,20 +414,35 @@ local function CreateModuleContent(parent, module)
 
     if module.db.thickness ~= nil then
         local lbl = UI:CreateText(f, "Thickness:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-        local eb = UI:CreateEditBox(f, 70, 20, "LEFT", lbl, "RIGHT", 10, 0)
-        eb:SetText(tostring(module.db.thickness or 20))
-        eb:SetScript("OnEnterPressed", function(self)
-            local v = tonumber(self:GetText())
-            if v and v >= 10 and v <= 40 then
-                module.db.thickness = v
-                if module.StopTicker then module:StopTicker() end
-                if module.StartTicker then module:StartTicker() end
+
+        local thicknessItems = {
+            { 10, "10 PX" },
+            { 20, "20 PX" },
+            { 30, "30 PX" },
+            { 40, "40 PX" },
+        }
+
+        local dd = UI:CreateDropdown(
+            f,
+            160, 24,                 -- w, h
+            "LEFT", lbl, "RIGHT", 10, 0,
+            thicknessItems,
+            function()
+                return tonumber(module.db.thickness) or 20
+            end,
+            function(v)
+                module.db.thickness = tonumber(v) or 20
                 ApplyModuleExtra(module)
-            end
-            self:ClearFocus()
-        end)
+            end,
+            "Grosor del anillo del mouse"
+        )
+
+        -- para reset: guardamos referencia si quieres (opcional)
+        f._bsThicknessDD = dd
+
         lastAnchor = lbl
     end
+
 
     if module.db.size ~= nil then
         local lbl = UI:CreateText(f, "Size:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
@@ -583,6 +598,13 @@ local function CreateModuleContent(parent, module)
             module.db.ringColorG = d.ringColorG
             module.db.ringColorB = d.ringColorB
             module.db.ringAlpha  = d.ringAlpha
+        end
+
+        if d.thickness ~= nil then
+            module.db.thickness = d.thickness
+            if f._bsThicknessDD and f._bsThicknessDD.Refresh then
+                f._bsThicknessDD:Refresh()
+            end
         end
 
         enable:SetChecked(module.enabled)

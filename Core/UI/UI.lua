@@ -115,6 +115,240 @@ function UI:ShowColorPicker(r, g, b, a, callback)
     ColorPickerFrame:Show()
 end
 
+function UI:CreateDropdown(parent, w, h, point, rel, relPoint, x, y, items, getFunc, setFunc, tooltipText, styleOpts)
+    items = items or {}
+    styleOpts = styleOpts or {}
+
+    local GRAY = 0.16
+    local ebBgA = styleOpts.bgA or 0.85
+    local openA = styleOpts.focusA or 1
+
+    -- Holder
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(w, h)
+    holder:SetPoint(point, rel, relPoint, x, y)
+
+    -- Display (EditBox look)
+    local eb = CreateFrame("EditBox", nil, holder, "InputBoxTemplate")
+    eb:SetAllPoints(holder)
+    eb:SetAutoFocus(false)
+    eb:EnableKeyboard(false)
+    eb:EnableMouse(true)
+    eb:SetTextInsets(8, 22, 4, 4)
+
+    if self.ApplyEditBoxStyle then
+        self:ApplyEditBoxStyle(eb, styleOpts)
+    end
+
+    -- Arrow texture: ArrowUp.tga (default rotated down; open -> up)
+    local ARROW_TEX = "Interface\\AddOns\\BlackSignal\\Media\\ArrowUp.tga"
+    local arrowTex = eb:CreateTexture(nil, "OVERLAY")
+    arrowTex:SetSize(12, 12)
+    arrowTex:SetPoint("RIGHT", eb, "RIGHT", -8, 0)
+    arrowTex:SetTexture(ARROW_TEX)
+    arrowTex:SetRotation(math.pi) -- down by default
+
+    -- Fallback ASCII if texture missing
+    if not arrowTex:GetTexture() then
+        arrowTex:Hide()
+        local arrow = eb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        arrow:SetPoint("RIGHT", eb, "RIGHT", -8, 0)
+        arrow:SetTextColor(1, 1, 1, 1)
+        arrow:SetText("v")
+        holder._arrowFS = arrow
+    end
+
+    -- Menu
+    local menu = CreateFrame("Frame", nil, holder, "BackdropTemplate")
+    menu:Hide()
+    menu:SetPoint("TOPLEFT", holder, "BOTTOMLEFT", 0, -2)
+    menu:SetPoint("TOPRIGHT", holder, "BOTTOMRIGHT", 0, -2)
+
+    -- Menu background like EditBox (gray)
+    if menu.SetBackdrop then
+        menu:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            tile = false,
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        menu:SetBackdropColor(GRAY, GRAY, GRAY, ebBgA)
+        menu:SetBackdropBorderColor(0, 0, 0, 1)
+    elseif self.ApplyPanelStyle then
+        self:ApplyPanelStyle(menu, ebBgA, 1)
+    end
+
+    -- Click-out overlay (only while open)
+    local overlay = CreateFrame("Frame", nil, UIParent)
+    overlay:Hide()
+    overlay:EnableMouse(true)
+    overlay:SetAllPoints(UIParent)
+
+    local buttons = {}
+    local rowH = 22
+
+    local function Refresh()
+        local current = getFunc and getFunc() or nil
+        local text = ""
+
+        for _, it in ipairs(items) do
+            if it[1] == current then
+                text = it[2] or tostring(it[1])
+                break
+            end
+        end
+        if text == "" and current ~= nil then text = tostring(current) end
+        eb:SetText(text)
+
+        -- highlight selected if supported
+        for _, b in ipairs(buttons) do
+            if b.SetBSActive then
+                b:SetBSActive(b._value == current)
+            end
+        end
+    end
+
+    local function CloseMenu()
+        menu:Hide()
+        overlay:Hide()
+        holder._open = false
+
+        -- arrow down
+        if arrowTex and arrowTex.SetRotation then
+            arrowTex:SetRotation(math.pi)
+        elseif holder._arrowFS then
+            holder._arrowFS:SetText("v")
+        end
+
+        -- restore editbox bg
+        if eb._bs and eb._bs.bgTex then
+            eb._bs.bgTex:SetColorTexture(GRAY, GRAY, GRAY, ebBgA)
+        end
+    end
+
+    local function OpenMenu()
+        if holder._open then return end
+
+        -- Put menu above config panels
+        menu:SetFrameStrata("DIALOG")
+        menu:SetFrameLevel((holder:GetFrameLevel() or 0) + 50)
+
+        -- Overlay under menu so buttons still clickable
+        overlay:SetFrameStrata(menu:GetFrameStrata())
+        overlay:SetFrameLevel(menu:GetFrameLevel() - 1)
+        overlay:Show()
+
+        -- arrow up
+        if arrowTex and arrowTex.SetRotation then
+            arrowTex:SetRotation(0)
+        elseif holder._arrowFS then
+            holder._arrowFS:SetText("^")
+        end
+
+        -- focus bg
+        if eb._bs and eb._bs.bgTex then
+            eb._bs.bgTex:SetColorTexture(0, 0, 0, openA)
+        end
+
+        menu:Show()
+        holder._open = true
+        Refresh()
+    end
+
+    local function ToggleMenu()
+        if holder._open then CloseMenu() else OpenMenu() end
+    end
+
+    overlay:SetScript("OnMouseDown", CloseMenu)
+
+    local function RebuildMenu()
+        for _, b in ipairs(buttons) do
+            b:Hide()
+            b:SetParent(nil)
+        end
+        wipe(buttons)
+
+        local totalH = 0
+
+        for i, it in ipairs(items) do
+            local value, label = it[1], it[2]
+
+            local b = CreateFrame("Button", nil, menu, "UIPanelButtonTemplate")
+            b:SetSize(w - 2, rowH)
+            b:SetText(label or tostring(value))
+            b._value = value
+
+            if UI.ApplyNavButtonStyle then
+                UI:ApplyNavButtonStyle(b, {
+                    bgA = 0.35,
+                    hoverA = 0.55,
+                    activeA = 0.75,
+                    borderA = 1,
+                    edgeSize = 1,
+                    paddingX = 10,
+                })
+            end
+
+            -- ensure above overlay
+            b:SetFrameLevel(menu:GetFrameLevel() + i)
+
+            if i == 1 then
+                b:SetPoint("TOPLEFT", menu, "TOPLEFT", 1, -1)
+                b:SetPoint("TOPRIGHT", menu, "TOPRIGHT", -1, -1)
+            else
+                b:SetPoint("TOPLEFT", buttons[i-1], "BOTTOMLEFT", 0, -1)
+                b:SetPoint("TOPRIGHT", buttons[i-1], "BOTTOMRIGHT", 0, -1)
+            end
+
+            b:SetScript("OnClick", function()
+                if setFunc then setFunc(value) end
+                Refresh()
+                CloseMenu()
+            end)
+
+            buttons[i] = b
+            totalH = totalH + rowH + 1
+        end
+
+        menu:SetHeight(math.max(1, totalH + 2))
+        Refresh()
+    end
+
+    -- Tooltip
+    if tooltipText then
+        holder:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltipText)
+            GameTooltip:Show()
+        end)
+        holder:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+
+    -- Click to toggle
+    eb:SetScript("OnMouseDown", ToggleMenu)
+
+    -- Avoid stuck open
+    holder:HookScript("OnHide", CloseMenu)
+
+    -- Public API
+    holder.SetItems = function(self, newItems)
+        items = newItems or {}
+        RebuildMenu()
+    end
+    holder.Refresh = Refresh
+    holder.CloseMenu = CloseMenu
+    holder.OpenMenu = OpenMenu
+    holder.EditBox = eb
+    holder.Menu = menu
+
+    -- Init
+    RebuildMenu()
+    Refresh()
+
+    return holder
+end
+
 -------------------------------------------------
 -- Panel style
 -------------------------------------------------
