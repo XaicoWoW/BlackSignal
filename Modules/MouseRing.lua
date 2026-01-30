@@ -15,25 +15,41 @@ BS:RegisterModule(MouseRing)
 -------------------------------------------------
 -- Defaults (para que Core/Config lo “entienda”)
 -------------------------------------------------
-function MouseRing:BuildDefaults()
-    return {
-        enabled       = true,
+local defaults = {
+    enabled       = true,
 
-        -- No se usan para posicionar va al cursor, pero por si acaso lo declaro
-        x             = 0,
-        y             = 0,
+    -- No se usan para posicionar va al cursor, pero por si acaso lo declaro
+    x             = 0,
+    y             = 0,
 
-        -- Mouse ring settings
-        ringEnabled   = true,
-        ringSize      = 48,
-        ringAlpha     = 0.9,
-        ringColorR    = 0,
-        ringColorG    = 1,
-        ringColorB    = 0,
-        ringThickness = 20, -- 10/20/30/40 (px)
-        --Para añadir el colorPicker en el panel de configuración
-        colorPicker   = true,
-    }
+    -- Mouse ring settings
+    ringEnabled   = true,
+    ringSize      = 48,
+    ringAlpha     = 0.9,
+    ringColorR    = 0,
+    ringColorG    = 1,
+    ringColorB    = 0,
+    ringThickness = 20,     -- 10/20/30/40 (px)
+    --Para añadir el colorPicker en el panel de configuración
+    colorPicker   = true,
+}
+
+MouseRing.defaults = defaults
+
+local function EnsureDB()
+    _G.BlackSignal = _G.BlackSignal or {}
+    local db = _G.BlackSignal
+
+    db.profile = db.profile or {}
+    db.profile.modules = db.profile.modules or {}
+    db.profile.modules.MouseRing = db.profile.modules.MouseRing or {}
+
+    local mdb = db.profile.modules.MouseRing
+    for k, v in pairs(defaults) do
+        if mdb[k] == nil then mdb[k] = v end
+    end
+
+    return mdb
 end
 
 local function GetRingTexturePath(mdb)
@@ -84,10 +100,8 @@ function MouseRing:Update()
 end
 
 function MouseRing:OnInit()
-    if not DB then return end
-
-    -- DB por módulo (integración con Core/Config)
-    self.db = self.db or DB:EnsureModuleDB(self.name, DB:BuildDefaults(self))
+    self.db = EnsureDB()
+    
     self.enabled = (self.db.enabled ~= false)
 
     if self.__initialized and self.frame then
