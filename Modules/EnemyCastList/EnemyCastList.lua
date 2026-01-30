@@ -169,6 +169,54 @@ local function ApplyFont(self)
 end
 
 -------------------------------------------------
+-- Color helpers (target colored by class if player; else by reaction)
+-------------------------------------------------
+local function HexFromRGB(r, g, b)
+    r = math.floor((r or 1) * 255 + 0.5)
+    g = math.floor((g or 1) * 255 + 0.5)
+    b = math.floor((b or 1) * 255 + 0.5)
+    return string.format("%02x%02x%02x", r, g, b)
+end
+
+local function Colorize(text, r, g, b)
+    if not text then return "" end
+    return "|cff" .. HexFromRGB(r, g, b) .. text .. "|r"
+end
+
+local function GetUnitFullName(unit)
+    local name, realm = UnitName(unit)
+    if not name then return nil end
+    if realm and realm ~= "" then
+        return name .. "-" .. realm
+    end
+    return name
+end
+
+local function GetColoredUnitName(unit)
+    local name = GetUnitFullName(unit)
+    if not name then return nil end
+
+    -- Player: class color
+    if UnitIsPlayer(unit) then
+        local _, classFile = UnitClass(unit)
+        local c = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+        if c then
+            return Colorize(name, c.r, c.g, c.b)
+        end
+        return name
+    end
+
+    -- NPC: reaction color
+    local reaction = UnitReaction(unit, "player")
+    if reaction and FACTION_BAR_COLORS and FACTION_BAR_COLORS[reaction] then
+        local c = FACTION_BAR_COLORS[reaction]
+        return Colorize(name, c.r, c.g, c.b)
+    end
+
+    return name
+end
+
+-------------------------------------------------
 -- State
 -------------------------------------------------
 function EnemyCastList:Reset()
@@ -196,8 +244,7 @@ end
 local function TryGetUnitTargetName(unit, noTargetText)
     local tu = unit .. "target"
     if UnitExists(tu) then
-        local n = UnitName(tu)
-        if n then return n end
+        return GetColoredUnitName(tu) or (noTargetText or "(sin target)")
     end
     return noTargetText or "(sin target)"
 end
