@@ -118,7 +118,7 @@ function CheckButton:Create(name, parent, width, height, text, point, relativeTo
     local cb = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate");
     cb:SetSize(width, height);
     cb:SetPoint(point, relativeTo, relativePoint, xOfs, yOfs);
-    cb:SetText(text);
+    cb.text:SetText(text)
 
     ApplyStyle(cb);
 

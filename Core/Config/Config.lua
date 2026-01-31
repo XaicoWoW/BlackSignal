@@ -291,23 +291,22 @@ local function CreateModuleContent(parent, module)
     title:SetTextColor(1, 1, 1, 1)
 
     -- Enable
-    local enable = UI:CreateCheck(f, "Enable", "TOPLEFT", f, "TOPLEFT", 0, -36)
-    enable:SetChecked(module.enabled ~= false)
-    UI:ApplyMinimalCheckStyle(enable)
+    local cb = BS.CheckButton:Create("EnableCheck", f, 150, 20,"Enable", "TOPLEFT", f, "TOPLEFT", 0, -36)
+    cb:SetChecked(module.enabled ~= false)
 
-    enable:SetScript("OnClick", function(self)
+    cb:SetScript("OnClick", function(self)
         SetModuleEnabled(module, self:GetChecked())
         if self._bsSync then self._bsSync() end
     end)
 
-    local lastAnchor = enable
+    local lastAnchor = cb
 
     -------------------------------------------------
     -- Position (optional)
     -------------------------------------------------
     local xEdit, yEdit
     if canPos then
-        local xLabel = UI:CreateText(f, "X:", "TOPLEFT", enable, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        local xLabel = UI:CreateText(f, "X:", "TOPLEFT", cb, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
         xEdit = UI:CreateEditBox(f, 70, 20, "LEFT", xLabel, "RIGHT", 10, 0)
         xEdit:SetText(tostring(module.db.x or 0))
 
@@ -445,7 +444,7 @@ local function CreateModuleContent(parent, module)
 
     if module.db.size ~= nil then
         local lbl = UI:CreateText(f, "Size:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-        local eb = UI:CreateEditBox(f, 70, 20, "LEFT", lbl, "RIGHT", 10, 0)
+        local eb = BS.EditBox:Create("ConfigSizeBox", f, 70, 20, "LEFT", lbl, "RIGHT", 10, 0)
         eb:SetText(tostring(module.db.size or 48))
         eb:SetScript("OnEnterPressed", function(self)
             local v = tonumber(self:GetText())
