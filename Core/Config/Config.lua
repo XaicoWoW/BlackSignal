@@ -1,5 +1,6 @@
 -- Core/Config.lua
 local _, BS = ...;
+
 BS.Fonts = {}
 
 local DB = BS.DB
@@ -793,7 +794,7 @@ SlashCmdList["BS"] = function(msg)
 
     -- no args -> open/close
     if msg == "" then
-        ToggleConfig()
+        BS.MainPanel:Toggle()
         return
     end
 
@@ -802,7 +803,7 @@ SlashCmdList["BS"] = function(msg)
     rest = rest or ""
 
     if cmd == "config" then
-        ToggleConfig()
+        BS.MainPanel:Toggle()
         return
     end
 
