@@ -25,9 +25,9 @@ local function ApplyStyle(btn, opts)
     btn._bs = btn._bs or {}
     local st = btn._bs
 
-    btn:SetNormalFontObject("GameFontHighlightMedium")
-    btn:SetHighlightFontObject("GameFontHighlightMedium")
-    btn:SetDisabledFontObject("GameFontDisableMed2")
+    btn:SetNormalFontObject("GameFontHighlightSmall")
+    btn:SetHighlightFontObject("GameFontHighlightSmall")
+    btn:SetDisabledFontObject("GameFontDisableSmall")
 
     -- Strip default textures ONCE (expensive-ish / noisy)
     if not st.stripped then
@@ -192,7 +192,18 @@ local function ApplyStyle(btn, opts)
     end
 end
 
-
+-- Creates a styled button
+--@param name Button name
+--@param parent Parent frame
+--@param width Button width
+--@param height Button height
+--@param text Button text
+--@param point Anchor point
+--@param relativeTo Relative frame
+--@param relativePoint Relative point
+--@param xOfs X offset
+--@param yOfs Y offset
+--@return Button API
 function Button:Create(name, parent, width, height, text, point, relativeTo, relativePoint, xOfs, yOfs)
     local btn = CreateFrame("Button", name, parent, "UIPanelButtonTemplate");
     btn:SetSize(width, height);
