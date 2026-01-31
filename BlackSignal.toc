@@ -7,6 +7,11 @@
 ## IconTexture: Interface/AddOns/BlackSignal/Media/icon
 ## SavedVariables: BlackSignal
 
+Core/UI/Colors.lua
+Core/Controls/Button.lua
+Core/Controls/CheckBox.lua
+Core/Controls/EditBox.lua
+Core/Controls/ColorPicker.lua
 
 Core/Init.lua
 Core/API.lua
