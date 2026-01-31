@@ -52,7 +52,7 @@ local function EnsureUI(self)
   if self.frame and self.text then return end
 
   local displayFrame = CreateFrame("Frame", "BS_ShimmerDisplay", UIParent)
-  displayFrame:SetSize(400, 50)
+  displayFrame:SetSize(400, 30)
   displayFrame:SetFrameStrata("LOW")
   displayFrame:Show()
 
