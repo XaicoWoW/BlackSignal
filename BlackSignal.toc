@@ -14,6 +14,7 @@ Core/Utils.lua
 Core/Ticker.lua
 Core/Events.lua
 Core/DB.lua
+Core/Movers.lua
 Core/UI/UI.lua
 Core/Config/Config.lua
 

@@ -444,7 +444,7 @@ function EnemyCastList:ApplyOptions()
     ApplyPosition(self)
     ApplySizeAndLayout(self)
     ApplyFont(self)
-
+    BS.Movers:Apply("EnemyCastList")
     if self.enabled then
         self:StartTicker()
         self:RefreshAll()
@@ -467,6 +467,7 @@ function EnemyCastList:OnInit()
     ApplySizeAndLayout(self)
     ApplyFont(self)
 
+    BS.Movers:Register(self.frame, "EnemyCastList", "Enemy Cast List")
     self:Reset()
 
     self.frame:SetShown(self.enabled)
