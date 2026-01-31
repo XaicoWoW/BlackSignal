@@ -83,11 +83,12 @@ local function CreateMoverOverlay(key, label, w, h)
     insets   = { left = 1, right = 1, top = 1, bottom = 1 },
   })
   m:SetBackdropColor(0, 0, 0, 0.55)
-  m:SetBackdropBorderColor(0.6, 0.2, 1, 1)
+  m:SetBackdropBorderColor(BS.colorRGB["r"],BS.colorRGB["g"],BS.colorRGB["b"], 1)
 
   local txt = m:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   txt:SetPoint("CENTER")
   txt:SetText(label or key)
+  txt:SetTextColor(BS.colorRGB["r"],BS.colorRGB["g"],BS.colorRGB["b"], 1)
   m.text = txt
 
   m:RegisterForDrag("LeftButton")
