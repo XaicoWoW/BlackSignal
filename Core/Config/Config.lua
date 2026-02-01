@@ -79,9 +79,13 @@ end
 
 -------------------------------------------------
 -- Apply enabled state on login (capability-aware)
--- (se mantiene aquí porque es “bootstrap”)
 -------------------------------------------------
 
+--- Return if a module supports position settings
+--- @local
+--- @param module table The module to chec
+--- @param defaults table The module default settings
+--- @return boolean support True if any module supports position settings
 local function SupportsPosition(module, defaults)
     if module and module.frame then return true end
     if UTILS:HasKey(defaults, "x") or UTILS:HasKey(defaults, "y") then return true end
@@ -89,6 +93,12 @@ local function SupportsPosition(module, defaults)
     return false
 end
 
+
+--- Return if a module supports font settings
+--- @local
+--- @param module table The module to check
+--- @param defaults table The module default settings
+--- @return boolean support True if any module supports font settings
 local function SupportsFont(module, defaults)
     if module and module.text and module.text.SetFont then return true end
     if UTILS:HasKey(defaults, "font") or UTILS:HasKey(defaults, "fontSize") or UTILS:HasKey(defaults, "fontFlags") then return true end
