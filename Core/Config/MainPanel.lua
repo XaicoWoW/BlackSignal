@@ -25,13 +25,13 @@ end
 
 --- Handle module selection from the left panel
 --- @local
---- @param leftPanel Frame table The left panel instance
+--- @param panel Frame table The panel instance
 --- @param module table The selected module data
-local function onSelectModule(leftPanel, module)
+local function onSelectModule(panel, module)
     ---@diagnostic disable-next-line: undefined-field
-    if leftPanel and leftPanel.SetActive then
+    if panel and panel.SetActive then
         ---@diagnostic disable-next-line: undefined-field
-        leftPanel:SetActive(module and module.name)
+        panel:SetActive(module and module.name)
     end
 
     if BS.RightPanel and BS.RightPanel.ShowModule then
