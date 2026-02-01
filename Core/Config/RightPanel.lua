@@ -1,13 +1,16 @@
 -- RightPanel.lua
+-- @module RightPanel
+-- @alias RightPanel
 
 local _, BS = ...
-BS.RightPanel = {}
 
-local RightPanel = BS.RightPanel
+BS.RightPanel       = {}
+local RightPanel    = BS.RightPanel
 
-local UI = BS.UI
+local UI    = BS.UI
+local UTILS = BS.UTILS
 
-local LEFT_GAP = 12
+local LEFT_GAP = 12 -- Gap between left and right panels
 
 -- ------------------------------------------------
 -- Fonts helpers
@@ -121,17 +124,15 @@ end
 -- ------------------------------------------------
 -- Capability detection
 -- ------------------------------------------------
-local function HasKey(t, k) return type(t) == "table" and t[k] ~= nil end
-
 local function SupportsFont(module, defaults)
     if module and module.text and module.text.SetFont then return true end
-    if HasKey(defaults, "font") or HasKey(defaults, "fontSize") or HasKey(defaults, "fontFlags") then return true end
+    if UTILS:HasKey(defaults, "font") or UTILS:HasKey(defaults, "fontSize") or UTILS:HasKey(defaults, "fontFlags") then return true end
     return false
 end
 
 local function SupportsTextField(module, defaults)
-    if HasKey(defaults, "text") then return true end
-    if module and module.db and HasKey(module.db, "text") then return true end
+    if UTILS:HasKey(defaults, "text") then return true end
+    if module and module.db and UTILS:HasKey(module.db, "text") then return true end
     return false
 end
 

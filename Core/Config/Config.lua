@@ -1,8 +1,9 @@
 -- Core/Config.lua
 local _, BS = ...
 
-local DB = BS.DB
-local UI = BS.UI
+local DB    = BS.DB
+local UI    = BS.UI
+local UTILS = BS.UTILS
 
 if not DB or not UI then
     error("BS: Missing Core/DB.lua or Core/UI.lua. Check .toc load order (DB.lua, UI.lua, then Config.lua).")
@@ -12,7 +13,6 @@ end
 -- Slash command
 -------------------------------------------------
 SLASH_BS1 = "/bs"
----@diagnostic disable-next-line: duplicate-set-field
 SlashCmdList["BS"] = function(msg)
     msg = (msg or ""):match("^%s*(.-)%s*$")
 
@@ -81,18 +81,17 @@ end
 -- Apply enabled state on login (capability-aware)
 -- (se mantiene aquí porque es “bootstrap”)
 -------------------------------------------------
-local function HasKey(t, k) return type(t) == "table" and t[k] ~= nil end
 
 local function SupportsPosition(module, defaults)
     if module and module.frame then return true end
-    if HasKey(defaults, "x") or HasKey(defaults, "y") then return true end
-    if module and module.db and (HasKey(module.db, "x") or HasKey(module.db, "y")) then return true end
+    if UTILS:HasKey(defaults, "x") or UTILS:HasKey(defaults, "y") then return true end
+    if module and module.db and (UTILS:HasKey(module.db, "x") or UTILS:HasKey(module.db, "y")) then return true end
     return false
 end
 
 local function SupportsFont(module, defaults)
     if module and module.text and module.text.SetFont then return true end
-    if HasKey(defaults, "font") or HasKey(defaults, "fontSize") or HasKey(defaults, "fontFlags") then return true end
+    if UTILS:HasKey(defaults, "font") or UTILS:HasKey(defaults, "fontSize") or UTILS:HasKey(defaults, "fontFlags") then return true end
     return false
 end
 
