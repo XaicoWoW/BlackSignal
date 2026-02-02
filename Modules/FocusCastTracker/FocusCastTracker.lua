@@ -10,7 +10,7 @@ local Tickers   = BS.Tickers
 local Events    = BS.Events
 
 local FocusCastTracker = {
-    name = "FocusCastTracker",
+    name = "Focus Cast Tracker",
     enabled = true,
     events = {},
 }

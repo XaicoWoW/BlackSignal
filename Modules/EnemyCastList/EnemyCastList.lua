@@ -9,7 +9,7 @@ local DB        = BS.DB
 local Tickers   = BS.Tickers
 
 local EnemyCastList = {
-    name = "EnemyCastList",
+    name = "Enemy Cast List",
     enabled = true,
     events = {},
 }

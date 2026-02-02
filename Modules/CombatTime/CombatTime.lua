@@ -14,7 +14,7 @@ local API        = BS.API
 local Events     = BS.Events
 
 local CombatTime = {
-    name    = "CombatTime",
+    name    = "Combat Time",
     enabled = true,
     events  = {},
 }
@@ -42,6 +42,8 @@ local defaults = {
     totalSeconds   = 0,    -- saved field (only meaningful if persistTotal = true)
 }
 
+CombatTime.defaults = defaults
+
 -------------------------------------------------
 -- State
 -------------------------------------------------
@@ -52,11 +54,26 @@ CombatTime.totalSeconds = 0
 -------------------------------------------------
 -- UI
 -------------------------------------------------
+
+local function CalculateHeight(self)
+    if not self.textFS or not self.db then return 30 end
+    local fontSize = tonumber(self.db.fontSize) or 20
+    return fontSize + 10
+end
+
+local function CalculateWidth(self)
+    if not self.textFS or not self.db then return 100 end
+    local fontSize = tonumber(self.db.fontSize) or 20
+    -- Approx width for "mm:ss" plus some padding
+    return (fontSize * 4) + 20
+end
+
 local function EnsureUI(self)
     if self.frame and self.textFS then return end
 
     local displayFrame = CreateFrame("Frame", "BS_CombatTimeDisplay", UIParent)
-    displayFrame:SetSize(400, 30)
+    displayFrame:SetHeight(CalculateHeight(self))
+    displayFrame:SetWidth(CalculateWidth(self))
     displayFrame:SetFrameStrata("LOW")
     displayFrame:Show()
 

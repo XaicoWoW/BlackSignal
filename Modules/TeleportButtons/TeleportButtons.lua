@@ -7,7 +7,7 @@ local API   = BS.API
 local DB    = BS.DB
 
 local TeleportButtons = {
-  name = "TeleportButtons",
+  name = "Teleport Buttons",
   enabled = true,
   events = {},
 }

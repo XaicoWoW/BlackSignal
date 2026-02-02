@@ -124,9 +124,8 @@ end
 -- ------------------------------------------------
 -- Capability detection
 -- ------------------------------------------------
-local function SupportsFont(module, defaults)
-    if module and module.text and module.text.SetFont then return true end
-    if UTILS:HasKey(defaults, "font") or UTILS:HasKey(defaults, "fontSize") or UTILS:HasKey(defaults, "fontFlags") then return true end
+local function SupportsFont(defaults)
+    if UTILS:HasKey(defaults, "font") or UTILS:HasKey(defaults, "fontSize") then return true end
     return false
 end
 
@@ -143,9 +142,6 @@ local function EnsureFontDefaults(module, defaults)
     end
     if module.db.fontSize == nil and defaults and defaults.fontSize ~= nil then
         module.db.fontSize = defaults.fontSize
-    end
-    if module.db.fontFlags == nil and defaults and defaults.fontFlags ~= nil then
-        module.db.fontFlags = defaults.fontFlags
     end
 end
 
@@ -210,7 +206,7 @@ local function CreateModuleContent(parent, module)
     module.db = module.db or BS.DB:EnsureDB(module.name, defaults)
     if module.enabled == nil then module.enabled = module.db.enabled end
 
-    local canFont = SupportsFont(module, defaults)
+    local canFont = SupportsFont(defaults)
     local canText = SupportsTextField(module, defaults)
 
     if canFont then EnsureFontDefaults(module, defaults) end

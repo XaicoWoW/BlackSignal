@@ -7,7 +7,7 @@ local DB        = BS.DB
 local API       = BS.API
 
 local MouseRing = {
-    name = "MouseRing",
+    name = "Mouse Ring",
     enabled = true,
     events = {},
 }

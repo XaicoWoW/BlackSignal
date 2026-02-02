@@ -7,7 +7,7 @@ local _, BS = ...;
 local DB    = BS.DB
 
 local AutoQueue = {
-  name = "AutoQueue",
+  name = "Auto Queue",
   enabled = true,
   events = {},
 }
