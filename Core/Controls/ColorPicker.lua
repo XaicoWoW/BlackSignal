@@ -3,101 +3,125 @@ BS.ColorPicker = {};
 
 local ColorPicker = BS.ColorPicker;
 
-local function DebugColor(r,g,b,a, tag)
-  print(tag or "COLOR", "r", r, "g", g, "b", b, "a", a)
+local function Clamp01(v)
+    v = tonumber(v) or 0
+    if v < 0 then return 0 end
+    if v > 1 then return 1 end
+    return v
 end
-
 
 local function showPopup(r, g, b, a, callback)
     -- Normalize inputs (avoid nil / strings)
-    r = tonumber(r) or 1
-    g = tonumber(g) or 1
-    b = tonumber(b) or 1
-    a = tonumber(a) or 1
-
-    -- WoW usa "opacity" (0..1) para el slider: 0 = opaco, 1 = transparente
-    -- Nosotros trabajamos con alpha (0..1): 0 = transparente, 1 = opaco
-    local lastOpacity = 1 - a
+    r = Clamp01(r)
+    g = Clamp01(g)
+    b = Clamp01(b)
+    a = Clamp01(a)
 
     local function Fire(nr, ng, nb, na)
-        if callback then callback(nr, ng, nb, na) end
+        if callback then callback(Clamp01(nr), Clamp01(ng), Clamp01(nb), Clamp01(na)) end
+    end
+
+    local function GetOpacityValue()
+        -- Retail: opacity slider is often nested, not global
+        local s =
+            (ColorPickerFrame and ColorPickerFrame.Content and ColorPickerFrame.Content.OpacitySlider)
+            or (ColorPickerFrame and ColorPickerFrame.opacitySlider)
+            or (ColorPickerFrame and ColorPickerFrame.OpacitySliderFrame)
+            or OpacitySliderFrame
+
+        if s and s.GetValue then
+            local v = tonumber(s:GetValue())
+            -- Some variants use 0..100
+            if v and v > 1 then v = v / 100 end
+            return v
+        end
+
+        -- Fallback to stored frame opacity
+        return tonumber(ColorPickerFrame and ColorPickerFrame.opacity)
     end
 
     local function GetPickedRGBA()
         local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+        nr, ng, nb = Clamp01(nr), Clamp01(ng), Clamp01(nb)
 
-        -- Retail moderno: si existe, alpha directo (0..1)
+        -- Prefer API alpha when it exists and is initialized
         if ColorPickerFrame.GetColorAlpha then
-            local na = ColorPickerFrame:GetColorAlpha()
-            return nr, ng, nb, na
+            local na = tonumber(ColorPickerFrame:GetColorAlpha())
+            if na and na > 0 then
+                return nr, ng, nb, Clamp01(na)
+            end
         end
 
-        -- Si no hay GetColorAlpha, usamos opacity
-        local opacity = lastOpacity
-
-        -- Algunos layouts guardan opacity aquí
-        if ColorPickerFrame.opacity ~= nil then
-            local v = tonumber(ColorPickerFrame.opacity)
-            if v ~= nil then opacity = v end
+        local opacity = GetOpacityValue()
+        if opacity == nil then
+            -- UI not ready yet: use cached initial alpha
+            local initA = ColorPickerFrame and ColorPickerFrame._bsInitAlpha
+            return nr, ng, nb, Clamp01(initA or 1)
         end
 
-        -- Fallback Classic
-        if OpacitySliderFrame and OpacitySliderFrame.GetValue then
-            local v = tonumber(OpacitySliderFrame:GetValue())
-            if v ~= nil then opacity = v end
-        end
-
-        local na = 1 - (tonumber(opacity) or 0)
-        return nr, ng, nb, na
+        opacity = Clamp01(opacity)
+        local na = 1 - opacity
+        return nr, ng, nb, Clamp01(na)
     end
 
-    local function OnChanged(...)
-        -- Retail: opacityFunc(opacity) suele pasar un número 0..1
-        local o = tonumber(...)
-        if o ~= nil then
-            lastOpacity = o
-        end
+    local function OnChanged()
         Fire(GetPickedRGBA())
     end
 
     local function OnCancel(prev)
         if prev then
-            local na = 1 - (prev.opacity or 0)
+            -- prev.opacity is "opacity" (0..1), not alpha
+            local na = 1 - Clamp01(prev.opacity or 0)
             Fire(prev.r, prev.g, prev.b, na)
         else
             Fire(r, g, b, a)
         end
     end
 
-    -- Retail / mainline
+    -- Cache initial alpha so the first read doesn't default to 0
+    if ColorPickerFrame then
+        ColorPickerFrame._bsInitAlpha = a
+    end
+
+    -- Retail API
     if ColorPickerFrame and ColorPickerFrame.SetupColorPickerAndShow then
         ColorPickerFrame:SetupColorPickerAndShow({
             r = r,
             g = g,
             b = b,
-            opacity = Clamp and Clamp(lastOpacity, 0, 1) or math.max(0, math.min(1, lastOpacity)),
+            opacity = 1 - a,     -- opacity 0..1 (1 = transparent)
             hasOpacity = true,
 
             swatchFunc  = OnChanged,
             opacityFunc = OnChanged,
             cancelFunc  = OnCancel,
         })
+
+        -- Some builds support setting alpha explicitly after setup
+        if ColorPickerFrame.SetColorAlpha then
+            ColorPickerFrame:SetColorAlpha(a)
+        end
+
         return
     end
 
     -- Classic fallback
     ColorPickerFrame:SetColorRGB(r, g, b)
     ColorPickerFrame.hasOpacity = true
-    ColorPickerFrame.opacity = 1 - a  -- <-- IMPORTANT: opacity, no alpha
-    lastOpacity = ColorPickerFrame.opacity
+    ColorPickerFrame.opacity = 1 - a
+
+    -- Ensure slider reflects current opacity (if present)
+    local s = OpacitySliderFrame
+    if s and s.SetValue then
+        s:SetValue(ColorPickerFrame.opacity or 0)
+    end
 
     ColorPickerFrame.func = OnChanged
     ColorPickerFrame.opacityFunc = OnChanged
     ColorPickerFrame.cancelFunc = function() OnCancel(nil) end
+
     ColorPickerFrame:Show()
 end
-
-
 
 
 function ColorPicker:Create(parent, w, h, point, relativeTo, relativePoint, x, y, getFunc, setFunc, tooltipText)
@@ -125,12 +149,13 @@ function ColorPicker:Create(parent, w, h, point, relativeTo, relativePoint, x, y
     local function SafeGet()
         if not getFunc then return 1, 1, 1, 1 end
         local r, g, b, a = getFunc()
-        return r or 1, g or 1, b or 1, a or 1
+        return Clamp01(r or 1), Clamp01(g or 1), Clamp01(b or 1), Clamp01(a or 1)
     end
 
     function cp:Refresh()
         local r, g, b, a = SafeGet()
-        self:SetBackdropColor(r, g, b, 1)
+        -- Paint alpha too
+        self:SetBackdropColor(r, g, b, a)
         self.__alpha = a
     end
 
