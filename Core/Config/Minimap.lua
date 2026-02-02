@@ -10,10 +10,10 @@ local MB = BS.MinimapButton
 
 local defaults = {
     enabled = true,
-    radius  = 110, -- distance from minimap center
+    radius  = 105, -- distance from minimap center
     angle   = 225, -- degrees
     lock    = false,
-    tooltip = "Black Signal",
+    tooltip = "BlackSignal",
 }
 
 MB.defaults = defaults
@@ -102,17 +102,20 @@ function MB:Init(db, opts)
     btn:RegisterForDrag("LeftButton")
     btn:SetClampedToScreen(true)
 
-    -- Ring
-    local border = btn:CreateTexture(nil, "BORDER")
-    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    border:SetAllPoints(btn)
 
-    -- Icon
-    local icon = btn:CreateTexture(nil, "BACKGROUND")
+    local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetTexture(opts.icon or "Interface\\AddOns\\BlackSignal\\Media\\icon_32.png")
-    icon:SetAllPoints(btn)
+    icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    icon:SetSize(24, 24)
+    btn.icon = icon
 
-    btn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    local border = btn:CreateTexture(nil, "OVERLAY")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    border:SetSize(54, 54)
+
+    border:SetPoint("CENTER", btn, "CENTER", 10, -10)
+
+    btn.border = border
 
     -- Tooltip
     btn:SetScript("OnEnter", function()
