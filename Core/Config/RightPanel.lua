@@ -2,15 +2,15 @@
 -- @module RightPanel
 -- @alias RightPanel
 
-local _, BS = ...
+local _, BS      = ...
 
-BS.RightPanel       = {}
-local RightPanel    = BS.RightPanel
+BS.RightPanel    = {}
+local RightPanel = BS.RightPanel
 
-local UI    = BS.UI
-local UTILS = BS.Utils
+local UI         = BS.UI
+local UTILS      = BS.Utils
 
-local LEFT_GAP = 12 -- Gap between left and right panels
+local LEFT_GAP   = 12 -- Gap between left and right panels
 
 -- ------------------------------------------------
 -- Fonts helpers
@@ -284,6 +284,29 @@ local function CreateModuleContent(parent, module)
             self:ClearFocus()
         end)
         lastAnchor = textLabel
+    end
+
+    if module.db.colorPicker then
+        local lbl = UI:CreateText(f, "Color:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+
+        BS.ColorPicker:Create(f, 26, 26, "LEFT", lbl, "RIGHT", 10, 0, function()
+                return
+                    module.db.ringColorR or 1,
+                    module.db.ringColorG or 1,
+                    module.db.ringColorB or 1,
+                    module.db.ringAlpha or 1
+            end,
+            function(r, g, b, a)
+                module.db.ringColorR = r
+                module.db.ringColorG = g
+                module.db.ringColorB = b
+                module.db.ringAlpha  = a
+                ApplyModuleExtra(module)
+            end,
+            "Click to change the color of the ring"
+        )
+
+        lastAnchor = lbl
     end
 
     -- Optional controls (tu lógica original)
