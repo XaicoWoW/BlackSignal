@@ -206,10 +206,11 @@ local function ApplyNavStyle(btn, opts)
     local edgeSize     = opts.edgeSize or 1
 
     local color        = opts.color or BS.Colors.Button.navNormal
-    local colorActive  = opts.colorActive or BS.Colors.Button.active
+    local colorActive  = opts.colorActive or BS.Colors.Button.navActive
     local normalText   = opts.normalText or BS.Colors.Text.white
-    local normalBorder = opts.normalBorder or BS.Colors.Button.borderNormal
-    local hoverBorder  = opts.hoverBorder or BS.Colors.Button.borderHover
+    local normalBorder = opts.normalBorder or BS.Colors.Button.navBorderNormal
+    local hoverBorder  = opts.hoverBorder or BS.Colors.Button.navBorderNormal
+    local activeBorder = opts.activeBorder or BS.Colors.Button.navBorderNormal
 
     -- -----------------------------
     -- One-time setup
@@ -263,6 +264,7 @@ local function ApplyNavStyle(btn, opts)
     st.normalText   = normalText
     st.normalBorder = normalBorder
     st.hoverBorder  = hoverBorder
+    st.activeBorder = activeBorder
 
     -- -----------------------------
     -- Layout + helpers
@@ -367,7 +369,7 @@ local function ApplyNavStyle(btn, opts)
             local bb = s.border
 
             if s._active then
-                local r, g, b, a = unpack(s.hoverBorder)
+                local r, g, b, a = unpack(s.activeBorder)
                 bb.top:SetColorTexture(r, g, b, a); bb.top:Show()
                 bb.bottom:SetColorTexture(r, g, b, a); bb.bottom:Show()
                 bb.left:SetColorTexture(r, g, b, a); bb.left:Show()
