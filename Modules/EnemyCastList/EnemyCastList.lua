@@ -9,9 +9,10 @@ local DB        = BS.DB
 local Tickers   = BS.Tickers
 
 local EnemyCastList = {
-    name = "Enemy Cast List",
+    name    = "BS_ECL",
+    label   = "EnemyCastList",
     enabled = true,
-    events = {},
+    events  = {},
 }
 
 API:Register(EnemyCastList)

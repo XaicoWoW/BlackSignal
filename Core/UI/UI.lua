@@ -3,8 +3,8 @@
 local _, BS = ...;
 BS.UI = {}
 
-
 local UI = BS.UI
+local EB = BS.EditBox
 
 -------------------------------------------------
 -- Basic creators
@@ -30,16 +30,11 @@ function UI:CreateDropdown(parent, w, h, point, rel, relPoint, x, y, items, getF
     holder:SetPoint(point, rel, relPoint, x, y)
 
     -- Display (EditBox look)
-    local eb = CreateFrame("EditBox", nil, holder, "InputBoxTemplate")
+    local eb = EB:Create("EditBox", holder, 70, 20, "", "LEFT", holder, "RIGHT", 10, 0)
     eb:SetAllPoints(holder)
     eb:SetAutoFocus(false)
     eb:EnableKeyboard(false)
     eb:EnableMouse(true)
-    eb:SetTextInsets(8, 22, 4, 4)
-
-    if self.ApplyEditBoxStyle then
-        self:ApplyEditBoxStyle(eb, styleOpts)
-    end
 
     -- Arrow texture: ArrowUp.tga (default rotated down; open -> up)
     local ARROW_TEX = "Interface\\AddOns\\BlackSignal\\Media\\ArrowUp.tga"

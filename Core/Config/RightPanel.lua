@@ -216,7 +216,7 @@ local function CreateModuleContent(parent, module)
     f:Hide()
 
     -- Title
-    local title = UI:CreateText(f, module.name, "TOPLEFT", f, "TOPLEFT", 0, 0, "GameFontNormalLarge")
+    local title = UI:CreateText(f, module.label, "TOPLEFT", f, "TOPLEFT", 0, 0, "GameFontNormalLarge")
     title:SetTextColor(1, 1, 1, 1)
 
     -- Enable

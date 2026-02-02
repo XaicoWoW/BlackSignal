@@ -14,7 +14,8 @@ local API        = BS.API
 local Events     = BS.Events
 
 local CombatTime = {
-    name    = "Combat Time",
+    name    = "BS_CT",
+    label   = "Combat Timer",
     enabled = true,
     events  = {},
 }
@@ -31,7 +32,6 @@ local defaults = {
     x              = 0,
     y              = -120,
     fontSize       = 20,
-    text           = "",
     font           = "Fonts\\FRIZQT__.TTF",
 
     -- Behavior
@@ -121,7 +121,7 @@ function CombatTime:Update()
 
     if not self.inCombat or not self.combatStart then
         -- Out of combat: hide and show 00:00 next time
-        self.textFS:SetText((self.db.text or defaults.text) .. "00:00")
+        self.textFS:SetText("00:00")
         self.frame:Hide()
         BS.Tickers:Stop(self)
         return
@@ -131,8 +131,7 @@ function CombatTime:Update()
     local seconds = now - self.combatStart
     if seconds < 0 then seconds = 0 end
 
-    local prefix = self.db.text or defaults.text
-    self.textFS:SetText(prefix .. FormatMMSS(seconds))
+    self.textFS:SetText(FormatMMSS(seconds))
     self.frame:Show()
 end
 
@@ -192,7 +191,7 @@ function CombatTime:LeaveCombat()
 
     -- Reset UI to 00:00 and hide
     if self.textFS then
-        self.textFS:SetText((self.db.text or defaults.text) .. "00:00")
+        self.textFS:SetText("00:00")
     end
 
     BS.Tickers:Stop(self)
@@ -231,7 +230,7 @@ function CombatTime:OnInit()
     else
         self.inCombat = false
         self.combatStart = nil
-        self.textFS:SetText((self.db.text or defaults.text) .. "00:00")
+        self.textFS:SetText("00:00")
         self.frame:Hide()
         BS.Tickers:Stop(self)
     end

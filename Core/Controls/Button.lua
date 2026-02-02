@@ -365,16 +365,17 @@ local function ApplyNavStyle(btn, opts)
             local s = self._bs
             if not s then return end
             s._active = active and true or false
-            s.bgTex:SetColorTexture(unpack(s.color))
             local bb = s.border
 
             if s._active then
+                s.bgTex:SetColorTexture(unpack(s.activeColor))
                 local r, g, b, a = unpack(s.activeBorder)
                 bb.top:SetColorTexture(r, g, b, a); bb.top:Show()
                 bb.bottom:SetColorTexture(r, g, b, a); bb.bottom:Show()
                 bb.left:SetColorTexture(r, g, b, a); bb.left:Show()
                 bb.right:SetColorTexture(r, g, b, a); bb.right:Show()
             else
+                s.bgTex:SetColorTexture(unpack(s.color))
                 local r, g, b, a = unpack(s.normalBorder)
                 bb.top:SetColorTexture(r, g, b, a); bb.top:Show()
                 bb.bottom:SetColorTexture(r, g, b, a); bb.bottom:Show()

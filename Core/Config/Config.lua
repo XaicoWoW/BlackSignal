@@ -4,6 +4,7 @@ local _, BS = ...
 local DB    = BS.DB
 local UI    = BS.UI
 local UTILS = BS.Utils
+local MB    = BS.MinimapButton
 
 if not DB or not UI then
     error("BS: Missing Core/DB.lua or Core/UI.lua. Check .toc load order (DB.lua, UI.lua, then Config.lua).")
@@ -75,6 +76,17 @@ SlashCmdList["BS"] = function(msg)
     end
 
     print("|cffb048f8BS:|r Comandos: /bs (config), /bs aq [toggle|on|off], /bs movers [toggle|on|off|reset]")
+end
+
+if MB then
+    MB:Init(DB:MinimapDB(MB.defaults), {
+        tooltip = "Black Signal",
+        onLeftClick = function()
+            if BS.MainPanel and BS.MainPanel.Toggle then
+                BS.MainPanel:Toggle()
+            end
+        end,
+    })
 end
 
 -------------------------------------------------

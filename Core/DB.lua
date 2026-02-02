@@ -14,6 +14,10 @@ local function Initialize()
     if not DB.profile then
         DB.profile = { modules = {} }
     end
+
+    if not DB.profile.minimap then
+        DB.profile.minimap = {}
+    end
     return DB
 end
 
@@ -29,6 +33,20 @@ function DB:EnsureDB(moduleName, defaults)
     db.profile.modules[moduleName] = db.profile.modules[moduleName] or {}
 
     local mdb = db.profile.modules[moduleName]
+    for k, v in pairs(defaults) do
+        if mdb[k] == nil then mdb[k] = v end
+    end
+
+    return mdb
+end
+
+function DB:MinimapDB(defaults) 
+    local db = Initialize()
+
+    db.profile = db.profile or {}
+    db.profile.minimap = db.profile.minimap or {}
+
+    local mdb = db.profile.minimap
     for k, v in pairs(defaults) do
         if mdb[k] == nil then mdb[k] = v end
     end

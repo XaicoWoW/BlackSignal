@@ -67,30 +67,55 @@ function MainPanel:CreateMenu()
     ConfigFrame:SetBackdropColor(unpack(BS.Colors.Backdrop.background))
     ConfigFrame:SetBackdropBorderColor(unpack(BS.Colors.Backdrop.border))
 
+    --- Top 5 pixel panel color
+
+    local topPanel = CreateFrame("Frame", "BSConfigTopColor", ConfigFrame, "BackdropTemplate")
+    topPanel:SetSize(PANEL_W - 10, 5)
+    topPanel:SetPoint("TOP", ConfigFrame, "TOP", 0, -5)
+
+    topPanel:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+
+    topPanel:SetBackdropColor(unpack(BS.Colors.Brand.primary))
+    topPanel:SetBackdropBorderColor(unpack(BS.Colors.Brand.primary))
+
     --- Title and Icon header
     local iconPath = "Interface\\AddOns\\BlackSignal\\Media\\icon_64.tga"
     local icon = ConfigFrame:CreateTexture(nil, "ARTWORK")
     icon:SetSize(32, 32)
     icon:SetTexture(iconPath)
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    icon:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 60, -14)
+    icon:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 60, -19)
 
     local title = UI:CreateText(ConfigFrame, "BlackSignal", "LEFT", icon, "RIGHT", 6, 0, "GameFontNormalLarge")
     title:SetTextColor(unpack(BS.Colors.Text.normal))
 
-    --- Close button
-    local close = CreateFrame("Button", nil, ConfigFrame)
-    close:SetSize(32, 32)
-    close:SetPoint("TOPRIGHT", ConfigFrame, "TOPRIGHT", -8, -8)
-    close:SetNormalFontObject("GameFontHighlight")
-    close:SetText("X")
-    close:GetFontString():SetTextColor(1, 1, 1, 1)
-    close:SetScript("OnClick", function() ConfigFrame:Hide() end)
-    close:SetScript("OnEnter", function(self) self:GetFontString():SetTextColor(1, 0.3, 0.3, 1) end)
-    close:SetScript("OnLeave", function(self) self:GetFontString():SetTextColor(1, 1, 1, 1) end)
+    -- Close button
+    local closeIconPath = "Interface\\AddOns\\BlackSignal\\Media\\Close.tga"
+
+    local CloseButton = CreateFrame("Button", nil, ConfigFrame)
+    CloseButton:SetSize(12, 12)
+    CloseButton:SetPoint("TOPRIGHT", ConfigFrame, "TOPRIGHT", -16, -24)
+
+    local tex = CloseButton:CreateTexture(nil, "ARTWORK")
+    tex:SetAllPoints()
+    tex:SetTexture(closeIconPath)
+
+
+    CloseButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+
+    CloseButton:SetScript("OnClick", function()
+        ConfigFrame:Hide()
+    end)
 
     --- Movers button
-    local movers = BS.Button:Create("BSConfigMoversButton", ConfigFrame, 80, 25, "Movers", "RIGHT", close, "LEFT", -6, 0)
+    local movers = BS.Button:Create("BSConfigMoversButton", ConfigFrame, 80, 25, "Movers", "RIGHT", CloseButton, "LEFT",
+    -6, 0)
     movers:SetScript("OnClick", function()
         if BS.Movers and BS.Movers.Toggle then BS.Movers:Toggle() end
     end)

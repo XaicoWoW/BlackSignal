@@ -7,9 +7,10 @@ local _, BS = ...;
 local DB    = BS.DB
 
 local AutoQueue = {
-  name = "Auto Queue",
+  name    = "BS_AQ",
+  label   = "Auto Queue",
   enabled = true,
-  events = {},
+  events  = {},
 }
 
 BS.API:Register(AutoQueue)

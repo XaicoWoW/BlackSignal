@@ -7,9 +7,10 @@ local DB        = BS.DB
 local API       = BS.API
 
 local MouseRing = {
-    name = "Mouse Ring",
+    name    = "BS_CR",
+    label   = "Cursor Ring",
     enabled = true,
-    events = {},
+    events  = {},
 }
 
 API:Register(MouseRing)

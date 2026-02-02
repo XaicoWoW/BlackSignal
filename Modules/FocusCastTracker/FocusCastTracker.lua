@@ -10,9 +10,10 @@ local Tickers   = BS.Tickers
 local Events    = BS.Events
 
 local FocusCastTracker = {
-    name = "Focus Cast Tracker",
+    name    = "BS_FCT",
+    label   = "Focus Cast Tracker",
     enabled = true,
-    events = {},
+    events  = {},
 }
 
 API:Register(FocusCastTracker)

@@ -9,10 +9,11 @@ local Events  = BS.Events
 
 
 local Shimmer = {
-  name = "Shimmer",
+  name    = "BS_S",
+  label   = "Shimmer",
   enabled = true,
   classes = "MAGE",
-  events = {},
+  events  = {},
 }
 
 API:Register(Shimmer)
