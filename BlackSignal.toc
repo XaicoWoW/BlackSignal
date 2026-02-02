@@ -3,6 +3,7 @@
 ## Author: Xaico, Gwydeon
 ## Version: 1.0.0
 ## X-Wago-ID: QN53BPKB
+## X-Curse-Project-ID: 1452012
 ## Interface: 120000, 120001
 ## IconTexture: Interface/AddOns/BlackSignal/Media/icon
 ## SavedVariables: BlackSignalDB
