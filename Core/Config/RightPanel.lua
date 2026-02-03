@@ -237,7 +237,8 @@ local function CreateModuleContent(parent, module, opts)
     title:SetTextColor(1, 1, 1, 1)
 
     -- Enable
-    local enableCB = BS.CheckButton:Create("EnableCheck", f, 150, 20, "Enable", "TOPLEFT", f, "TOPLEFT", 0, -36)
+    local enableCB = BS.CheckButton:Create("EnableCheck", f, 150, 20, "Enable", "Enable/Disable this module",
+        "TOPLEFT", f, "TOPLEFT", 0, -36)
     enableCB:SetChecked(module.enabled ~= false)
     enableCB:SetScript("OnClick", function(self)
         SetModuleEnabled(module, self:GetChecked())
@@ -291,17 +292,29 @@ local function CreateModuleContent(parent, module, opts)
     local function AddBoolOption(dbKey, label)
         if module.db[dbKey] == nil then return end
 
-        local lbl = UI:CreateText(f, label, "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
-        local cb = BS.CheckButton:Create("Config_" .. module.name .. "_" .. dbKey, f, 20, 20, "", "LEFT", lbl, "RIGHT",
-            10, 0)
+        -- Create the checkbox as a full-width row under the previous anchor.
+        -- We pass the label as the checkbox's own text (so it participates in full-width layout).
+        local cb = BS.CheckButton:Create(
+            "Config_" .. module.name .. "_" .. dbKey,
+            f,
+            20, 20,
+            label, "", -- <-- label goes here now
+            "TOPLEFT", lastAnchor, "BOTTOMLEFT",
+            0, -8,
+            { padLeft = 0, padRight = 0 } -- optional; keep if you use padding elsewhere
+        )
 
         cb:SetChecked(module.db[dbKey] == true)
+        if cb._bsSync then cb:_bsSync() end -- ensure visuals match initial state (mark/bg)
+
         cb:SetScript("OnClick", function(self)
             module.db[dbKey] = self:GetChecked() and true or false
+            if self._bsSync then self:_bsSync() end
             ApplyModuleExtra(module)
         end)
 
-        lastAnchor = lbl
+        -- For chaining next control placement, anchor from the checkbox row itself
+        lastAnchor = cb
     end
 
     -- Text field
@@ -411,11 +424,11 @@ local function CreateModuleContent(parent, module, opts)
             { color = BS.Colors.Brand.primary, alpha = 1, thickness = 1 })
         lastAnchor = sep
     end
-    AddBoolOption("showOnlyInGroup", "Show only in group:")
-    AddBoolOption("showOnlyInInstance", "Show only in instance:")
-    AddBoolOption("showOnlyPlayerClassBuff", "Show only my class buffs:")
-    AddBoolOption("showOnlyPlayerMissing", "Show only buffs I'm missing:")
-    AddBoolOption("showOnlyOnReadyCheck", "Show Only on ready check:")
+    AddBoolOption("showOnlyInGroup", "Show only in group")
+    AddBoolOption("showOnlyInInstance", "Show only in instance")
+    AddBoolOption("showOnlyPlayerClassBuff", "Show only my class buffs")
+    AddBoolOption("showOnlyPlayerMissing", "Show only buffs I'm missing")
+    AddBoolOption("showOnlyOnReadyCheck", "Show Only on ready check")
 
 
     if not opts.stack then
