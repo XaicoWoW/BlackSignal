@@ -24,17 +24,17 @@ API:Register(FocusCastTracker)
 local FONT = "Fonts\\FRIZQT__.TTF"
 
 local defaults = {
-    enabled                 = true,
-    x                       = 0,
-    y                       = 200,
-    fontSize                = 16,
-    font                    = FONT,
+    enabled             = true,
+    x                   = 0,
+    y                   = 200,
+    fontSize            = 16,
+    font                = FONT,
 
-    text                    = "",
+    text                = "Interrupt",
 
-    updateInterval          = 0.05,
+    updateInterval      = 0.05,
 
-    onlyShowIfKickReady     = true,
+    onlyShowIfKickReady = true,
 }
 
 FocusCastTracker.defaults = defaults
@@ -60,21 +60,43 @@ local KICK_BY_CLASS = {
 -- UI
 -------------------------------------------------
 local function EnsureUI(self)
-    if self.frame and self.text then return end
+    if self.frame and self.text and not self.db then return end
+    local fontPath = self.db.font or FONT
+    local fontSize = tonumber(self.db.fontSize) or 16
+    local kickText = "Interrupt"
+
+    if self.db.text and self.db.text ~= "" then
+        kickText = self.db.text
+    end
 
     local f = CreateFrame("Frame", "BS_FocusCastTrackerDisplay", UIParent)
     f:SetSize(380, 30)
     f:SetFrameStrata("LOW")
     f:Hide()
 
+    -- Texto principal
     local t = f:CreateFontString(nil, "OVERLAY")
     t:SetPoint("CENTER")
     t:SetJustifyH("CENTER")
     t:SetTextColor(1, 1, 1, 1)
 
-    self.frame = f
-    self.text  = t
+    -- Badge "!" (no interrumpible)
+    local warn = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    warn:SetSize(18, 18)
+    warn:SetPoint("CENTER", f, "CENTER", 0, -fontSize)
+
+
+    local wt = warn:CreateFontString(nil, "OVERLAY")
+    wt:SetPoint("CENTER", warn, "CENTER", 0, -1)
+    wt:SetFont(fontPath, fontSize, "OUTLINE")
+    wt:SetTextColor(1.00, 0.15, 0.15, 1.00)
+    wt:SetText(kickText)
+
+    self.frame     = f
+    self.text      = t
+    self.warnFrame = warn
 end
+
 
 local function ApplyPosition(self)
     if not self.frame or not self.db then return end
@@ -171,11 +193,11 @@ function FocusCastTracker:ReadFocusCast()
         return nil
     end
 
-    local name, _, _, _, _, _, _, _, spellId = UnitCastingInfo("focus")
+    local name, _, _, _, _, _, _, notInterruptible, spellId = UnitCastingInfo("focus")
 
     if not name then
         -- also consider channels
-        name, _, _, _, _, _, _, _, _, spellId = UnitChannelInfo("focus")
+        name, _, _, _, _, _, _, _, notInterruptible, spellId = UnitChannelInfo("focus")
     end
 
     if not name then
@@ -186,6 +208,7 @@ function FocusCastTracker:ReadFocusCast()
     local info = {
         name             = name,
         spellId          = spellId,
+        notInterruptible = notInterruptible,
         targetName       = GetFocusTargetName(),
     }
 
@@ -233,15 +256,15 @@ function FocusCastTracker:Update()
         self.frame:SetAlpha(1)
     end
 
+    if self.warnFrame then
+        self.warnFrame:SetAlphaFromBoolean(self.castInfo.notInterruptible, 0, 1)
+    end
+
     -- Build message
-    local msg
-    if self.db.text and self.db.text ~= "" then
-        msg = self.db.text
-    else
-        msg = self.castInfo.name
-        if self.castInfo.targetName then
-            msg = msg .. " >> " .. self.castInfo.targetName
-        end
+    local msg = self.castInfo.name
+
+    if self.castInfo.targetName then
+        msg = msg .. " >> " .. self.castInfo.targetName
     end
 
     self.text:SetText(msg)
