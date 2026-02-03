@@ -36,20 +36,25 @@ local defaults = {
     showText                = true,
     x                       = 0,
     y                       = 500,
-    showOptions = true,
+    showOptions             = true,
+
     showOnlyInGroup         = false,
     showOnlyInInstance      = false,
     showOnlyPlayerClassBuff = false,
     showOnlyPlayerMissing   = false,
     showOnlyOnReadyCheck    = false,
+
     showExpirationGlow      = true,
     expirationThreshold     = 15, -- minutes
+
     categories              = {
         raid     = true,
         presence = true,
         personal = true,
-        self     = true,},    -- custom buffs (self-only)
-    }
+        self     = true,
+        -- custom buffs (self-only) -> se gestionan en Data/Engine/UI
+    },
+}
 
 -------------------------------------------------
 -- Internal helpers
@@ -67,6 +72,14 @@ local function CancelReadyCheckTimer(self)
     end
 end
 
+local function IsMythicPlusActive()
+    return C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive and C_ChallengeMode.IsChallengeModeActive()
+end
+
+local function UpdateChallengeState(self)
+    self._inChallengeMode = IsMythicPlusActive() and true or false
+end
+
 local function ScheduleTalentRefresh(self)
     -- Talent swaps spam multiple events; coalesce them.
     if self._talentTimer then
@@ -77,6 +90,15 @@ local function ScheduleTalentRefresh(self)
         self._talentTimer = nil
         self:RequestUpdate(true)
     end)
+end
+
+-- IMPORTANT:
+-- En tu UI.lua existe UI:HideAll() (y NO UI:Hide()).
+-- Si aquí llamábamos a UI:Hide(), no se ocultaba nada en combate.
+local function HideUI(self)
+    if self and self.UI and self.UI.HideAll then
+        self.UI:HideAll()
+    end
 end
 
 -------------------------------------------------
@@ -92,8 +114,11 @@ function BuffTracker:RequestUpdate(force)
 
     self._nextAllowed = now + UPDATE_THROTTLE_SEC
 
-    if self._inCombat then
-        if self.UI and self.UI.Hide then self.UI:Hide(self) end
+    UpdateChallengeState(self)
+
+    if self._inCombat or self._inChallengeMode then
+        CancelReadyCheckTimer(self)
+        HideUI(self)
         return
     end
 
@@ -103,7 +128,7 @@ end
 
 function BuffTracker:Update()
     if not self.db or self.db.enabled == false then
-        if self.UI and self.UI.Hide then self.UI:Hide(self) end
+        HideUI(self)
         return
     end
     self:RequestUpdate(true)
@@ -126,12 +151,17 @@ function BuffTracker:OnInit()
 
     -- State
     self._inCombat        = InCombatLockdown()
+    self._inChallengeMode = IsMythicPlusActive() and true or false
     self._inReadyCheck    = false
     self._readyCheckTimer = nil
     self._talentTimer     = nil
 
     -- Events
     Events:RegisterEvent("PLAYER_ENTERING_WORLD")
+    Events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    Events:RegisterEvent("CHALLENGE_MODE_START")
+    Events:RegisterEvent("CHALLENGE_MODE_RESET")
+    Events:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     Events:RegisterEvent("GROUP_ROSTER_UPDATE")
     Events:RegisterEvent("UNIT_AURA")
     Events:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -152,6 +182,27 @@ BuffTracker.events.PLAYER_ENTERING_WORLD = function(self)
     self:RequestUpdate(true)
 end
 
+BuffTracker.events.ZONE_CHANGED_NEW_AREA = function(self)
+    UpdateChallengeState(self)
+    self:RequestUpdate(true)
+end
+
+BuffTracker.events.CHALLENGE_MODE_START = function(self)
+    UpdateChallengeState(self)
+    CancelReadyCheckTimer(self)
+    HideUI(self)
+end
+
+BuffTracker.events.CHALLENGE_MODE_RESET = function(self)
+    UpdateChallengeState(self)
+    self:RequestUpdate(true)
+end
+
+BuffTracker.events.CHALLENGE_MODE_COMPLETED = function(self)
+    UpdateChallengeState(self)
+    self:RequestUpdate(true)
+end
+
 BuffTracker.events.GROUP_ROSTER_UPDATE = function(self)
     self:RequestUpdate(true)
 end
@@ -164,7 +215,7 @@ end
 BuffTracker.events.PLAYER_REGEN_DISABLED = function(self)
     self._inCombat = true
     CancelReadyCheckTimer(self)
-    if self.UI and self.UI.Hide then self.UI:Hide(self) end
+    HideUI(self)
 end
 
 BuffTracker.events.PLAYER_REGEN_ENABLED = function(self)
