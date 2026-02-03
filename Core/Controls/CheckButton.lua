@@ -4,17 +4,23 @@ BS.CheckButton = {};
 local CheckButton = BS.CheckButton;
 
 local function ApplyStyle(check, opts)
-    opts = opts or {}
+    opts             = opts or {}
 
-    local size        = opts.size or 14
-    local markSize    = opts.markSize or (size - 2)
-    local edgeSize    = opts.edgeSize or 1
-    local gap         = opts.gap or 8
+    local size       = opts.size or 14
+    local markSize   = opts.markSize or (size - 2)
+    local edgeSize   = opts.edgeSize or 1
 
-    local bgOff       = opts.bgOff or BS.Colors.CheckButton.boxBg or { 0.12, 0.12, 0.12, 1 }
-    local bgOn        = opts.bgOn  or BS.Colors.CheckButton.mark or { 0.16, 0.16, 0.16, 1 }
-    local border      = opts.border or BS.Colors.CheckButton.boxBorder or { 0, 0, 0, 1 }
-    local markColor   = opts.markColor or BS.Colors.CheckButton.mark or { 1, 1, 1, 1 }
+    local gap        = opts.gap or 8       -- gap between box and main label
+    local infoGap    = opts.infoGap or 12  -- gap between label and info text
+    local rightPad   = opts.rightPad or 6
+
+    local bgOff      = opts.bgOff or BS.Colors.CheckButton.boxBg or { 0.12, 0.12, 0.12, 1 }
+    local bgOn       = opts.bgOn or BS.Colors.CheckButton.mark or { 0.16, 0.16, 0.16, 1 }
+    local border     = opts.border or BS.Colors.CheckButton.boxBorder or { 0, 0, 0, 1 }
+    local markColor  = opts.markColor or BS.Colors.CheckButton.mark or { 1, 1, 1, 1 }
+
+    local infoColor  = opts.infoColor or BS.Colors.Text and BS.Colors.Text.muted or { 0.70, 0.70, 0.70, 1 }
+    local labelColor = opts.labelColor or { 1, 1, 1, 1 }
 
     local function KillTexturesOnce()
         if check._bsTexturesKilled then return end
@@ -59,25 +65,76 @@ local function ApplyStyle(check, opts)
         mark:SetVertexColor(unpack(markColor))
         mark:Hide()
 
-        check._box = box
+        check._box  = box
         check._mark = mark
     end
 
-    local function StyleText()
-        local text = check.Text or check.text or (check.GetFontString and check:GetFontString())
-        if not text then return end
+    local function EnsureText()
+        -- Blizzard template text can be: cb.Text, cb.text, or GetFontString()
+        local label = check.Text or check.text or (check.GetFontString and check:GetFontString())
+        if not label then
+            label = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            check.Text = label
+        end
 
-        text:SetTextColor(1, 1, 1, 1)
-        text:SetJustifyH("LEFT")
-        text:ClearAllPoints()
-        text:SetPoint("LEFT", check._box, "RIGHT", gap, 0)
+        label:SetTextColor(unpack(labelColor))
+        label:SetJustifyH("LEFT")
+        label:ClearAllPoints()
+        label:SetPoint("LEFT", check._box, "RIGHT", gap, 0)
+
+        check._label = label
+    end
+
+    local function EnsureInfo()
+        if check._info then return end
+
+        local info = check:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+        info:SetTextColor(unpack(infoColor))
+        info:SetJustifyH("LEFT")
+        info:SetJustifyV("MIDDLE")
+
+        -- Position like the screenshot: to the RIGHT of the main label
+        info:ClearAllPoints()
+        info:SetPoint("LEFT", check._label, "RIGHT", infoGap, 0)
+        info:SetPoint("RIGHT", check, "RIGHT", -rightPad, 0)
+        info:SetWordWrap(true)
+
+        check._info = info
     end
 
     local function EnsureSizing()
         if check._bsSized then return end
         check._bsSized = true
+
+        -- Control height (layout)
         check:SetHeight(math.max(20, size + 6))
+
+        -- Hit rect: ONLY the checkbox square (box)
+        -- Default: make it as wide as the box, plus a tiny padding
+        local hitPad = tonumber(opts.hitPad) or 2
+
+        -- We need the row width to compute how much to shrink on the right
+        check:HookScript("OnSizeChanged", function(self)
+            if not self._box then return end
+
+            local w = self:GetWidth() or 0
+            local hitW = (self._box:GetWidth() or size) + (hitPad * 2)
+
+            -- shrink everything except the first hitW pixels from the left
+            local rightInset = math.max(0, w - hitW)
+
+            -- leftInset=0 keeps left edge at frame left
+            -- rightInset cuts clickable area from the right side
+            self:SetHitRectInsets(0, rightInset, hitPad, hitPad)
+        end)
+
+        -- run once immediately (in case size is already known)
+        local w = check:GetWidth() or 0
+        local hitW = size + (hitPad * 2)
+        local rightInset = math.max(0, w - hitW)
+        check:SetHitRectInsets(0, rightInset, hitPad, hitPad)
     end
+
 
     local function Sync()
         if not check._box or not check._mark then return end
@@ -88,50 +145,55 @@ local function ApplyStyle(check, opts)
 
     KillTexturesOnce()
     EnsureBox()
-    StyleText()
+    EnsureText()
+    EnsureInfo()
     EnsureSizing()
 
-    -- Hook scripts without nuking existing handlers (so it plays nice with other code)
     if not check._bsHooked then
         check._bsHooked = true
 
-        check:HookScript("OnLeave", function()
-            Sync()
-        end)
-
-        check:HookScript("OnClick", function()
-            Sync()
-        end)
-
-        check:HookScript("OnShow", function()
-            Sync()
-        end)
+        check:HookScript("OnLeave", function() Sync() end)
+        check:HookScript("OnClick", function() Sync() end)
+        check:HookScript("OnShow", function() Sync() end)
     end
 
     check._bsSync = Sync
     Sync()
 end
 
+--- Set label + info text (safe to call anytime)
+function CheckButton:SetTexts(cb, labelText, infoText)
+    if cb._label then cb._label:SetText(labelText or "") end
+    if cb._info then
+        cb._info:SetText(infoText or "")
+        cb._info:SetShown(infoText and infoText ~= "")
+    end
+end
 
---- Create a styled CheckButton control.
---- @param name string Unique global frame name.
---- @param parent Frame Parent frame.
---- @param width number Button width in pixels.
---- @param height number Button height in pixels.
---- @param text string Label shown on the checkbutton.
---- @param point string Anchor point on the checkbutton (e.g. "LEFT", "TOPLEFT").
---- @param relativeTo Frame Anchor reference frame.
---- @param relativePoint string Anchor point on the reference frame.
---- @param xOfs number X offset in pixels.
---- @param yOfs number Y offset in pixels.
---- @return CheckButton cb The created checkbutton.
-function CheckButton:Create(name, parent, width, height, text, point, relativeTo, relativePoint, xOfs, yOfs)
-    local cb = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate");
-    cb:SetSize(width, height);
-    cb:SetPoint(point, relativeTo, relativePoint, xOfs, yOfs);
-    cb.text:SetText(text)
+--- Create a styled CheckButton control with optional info text
+--- @return CheckButton cb
+function CheckButton:Create(name, parent, _, height, text, infoText, point, relativeTo, relativePoint, xOfs, yOfs, opts)
+    opts = opts or {}
 
-    ApplyStyle(cb);
+    local cb = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate")
+    cb:SetHeight(height)
 
-    return cb;
+    local padLeft  = tonumber(opts.padLeft) or 0
+    local padRight = tonumber(opts.padRight) or 0
+
+    -- Anchor vertical/primary position as requested
+    cb:SetPoint(point, relativeTo, relativePoint, xOfs + padLeft, yOfs)
+
+    -- Force full width of the parent
+    cb:ClearAllPoints()
+    cb:SetPoint(point, relativeTo, relativePoint, xOfs, yOfs)
+    cb:SetPoint("LEFT", parent, "LEFT", padLeft, 0)
+    cb:SetPoint("RIGHT", parent, "RIGHT", -padRight, 0)
+
+    ApplyStyle(cb, opts)
+
+    -- Use our internal label reference to avoid template inconsistencies
+    self:SetTexts(cb, text, infoText)
+
+    return cb
 end
