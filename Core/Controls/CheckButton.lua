@@ -113,7 +113,18 @@ local function ApplyStyle(check, opts)
 end
 
 
-
+--- Create a styled CheckButton control.
+--- @param name string Unique global frame name.
+--- @param parent Frame Parent frame.
+--- @param width number Button width in pixels.
+--- @param height number Button height in pixels.
+--- @param text string Label shown on the checkbutton.
+--- @param point string Anchor point on the checkbutton (e.g. "LEFT", "TOPLEFT").
+--- @param relativeTo Frame Anchor reference frame.
+--- @param relativePoint string Anchor point on the reference frame.
+--- @param xOfs number X offset in pixels.
+--- @param yOfs number Y offset in pixels.
+--- @return CheckButton cb The created checkbutton.
 function CheckButton:Create(name, parent, width, height, text, point, relativeTo, relativePoint, xOfs, yOfs)
     local cb = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate");
     cb:SetSize(width, height);

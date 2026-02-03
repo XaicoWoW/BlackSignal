@@ -197,6 +197,8 @@ local function SetModuleEnabled(module, enabled)
     end
 end
 
+
+
 -- ------------------------------------------------
 -- Content factory
 -- ------------------------------------------------
@@ -266,6 +268,26 @@ local function CreateModuleContent(parent, module)
 
         SetDropdownSelectionByValue(fontDD, module.db.font, fonts)
         lastAnchor = fontPickLabel
+    end
+
+    -------------------------------------------------
+    -- BuffTracker-like options (visibility / readycheck / glow)
+    -------------------------------------------------
+    local function AddBoolOption(dbKey, label)
+        if module.db[dbKey] == nil then return end
+
+        local lbl = UI:CreateText(f, label, "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        -- local cb  = BS.CheckButton:Create("Config_" .. module.name .. "_" .. dbKey, f, "LEFT", lbl, "RIGHT", 10, 0)
+        local cb = BS.CheckButton:Create("Config_" .. module.name .. "_" .. dbKey, f, 20, 20, "", "LEFT", lbl, "RIGHT",
+            10, 0)
+
+        cb:SetChecked(module.db[dbKey] == true)
+        cb:SetScript("OnClick", function(self)
+            module.db[dbKey] = self:GetChecked() and true or false
+            ApplyModuleExtra(module)
+        end)
+
+        lastAnchor = lbl
     end
 
     -- Text field
@@ -368,6 +390,37 @@ local function CreateModuleContent(parent, module)
         lastAnchor = lbl
     end
 
+    if module.db.iconSize ~= nil then
+        local lbl = UI:CreateText(f, "Icon Size:", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -14, "GameFontHighlight")
+        local eb = BS.EditBox:Create("ConfigIconSizeBox", f, 70, 20, "", "LEFT", lbl, "RIGHT", 10, 0)
+
+        eb:SetText(tostring(module.db.iconSize or 32))
+        eb:SetScript("OnEnterPressed", function(self)
+            local v = tonumber(self:GetText())
+            if v then
+                if v < 8 then v = 8 end
+                if v > 128 then v = 128 end
+                module.db.iconSize = v
+                ApplyModuleExtra(module) -- ApplyOptions() si existe
+            end
+            self:ClearFocus()
+        end)
+
+        lastAnchor = lbl
+    end
+
+    if module.db.showOptions == true then
+        local optTitle = UI:CreateText(f, "Visibility conditions", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -28, "GameFontHighlight")
+        local sep = UI:CreateSeparator(f, 520, "TOPLEFT", optTitle, "BOTTOMLEFT", 0, -10, { color = BS.Colors.Brand.primary, alpha = 1, thickness = 1 })
+        lastAnchor = sep
+    end
+    AddBoolOption("showOnlyInGroup", "Show only in group:")
+    AddBoolOption("showOnlyInInstance", "Show only in instance:")
+    AddBoolOption("showOnlyPlayerClassBuff", "Show only my class buffs:")
+    AddBoolOption("showOnlyPlayerMissing", "Show only buffs I'm missing:")
+    AddBoolOption("showOnlyOnReadyCheck", "Show Only on ready check:")
+
+
     -- Reset (usa defaults reales si existen)
     local reset = BS.Button:Create("ResetButton", f, 140, 24, "Reset Defaults", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0,
         -18)
@@ -402,6 +455,18 @@ local function CreateModuleContent(parent, module)
         -- extras típicos
         if d.updateInterval ~= nil then module.db.updateInterval = d.updateInterval end
         if d.size ~= nil then module.db.size = d.size end
+        if d.iconSize ~= nil then module.db.iconSize = d.iconSize end
+        if d.showOnlyInGroup ~= nil then module.db.showOnlyInGroup = d.showOnlyInGroup end
+        if d.showOnlyInInstance ~= nil then module.db.showOnlyInInstance = d.showOnlyInInstance end
+        if d.showOnlyPlayerClassBuff ~= nil then module.db.showOnlyPlayerClassBuff = d.showOnlyPlayerClassBuff end
+        if d.showOnlyPlayerMissing ~= nil then module.db.showOnlyPlayerMissing = d.showOnlyPlayerMissing end
+
+        if d.showOnlyOnReadyCheck ~= nil then module.db.showOnlyOnReadyCheck = d.showOnlyOnReadyCheck end
+        if d.readyCheckDuration ~= nil then module.db.readyCheckDuration = d.readyCheckDuration end
+
+        if d.showExpirationGlow ~= nil then module.db.showExpirationGlow = d.showExpirationGlow end
+        if d.expirationThreshold ~= nil then module.db.expirationThreshold = d.expirationThreshold end
+
         if d.thickness ~= nil then
             module.db.thickness = d.thickness
             if f._bsThicknessDD and f._bsThicknessDD.Refresh then f._bsThicknessDD:Refresh() end

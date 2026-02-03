@@ -245,6 +245,98 @@ function UI:CreateDropdown(parent, w, h, point, rel, relPoint, x, y, items, getF
     return holder
 end
 
+function UI:CreateSeparator(parent, w, point, rel, relPoint, x, y, opts)
+    opts = opts or {}
+
+    local GRAY = opts.gray or 0.16
+
+    -- Color: acepta {r,g,b} o {r,g,b,a}
+    local cr, cg, cb, ca
+    if opts.color and type(opts.color) == "table" then
+        cr = opts.color[1] or GRAY
+        cg = opts.color[2] or GRAY
+        cb = opts.color[3] or GRAY
+        ca = opts.color[4] -- opcional
+    else
+        cr, cg, cb = GRAY, GRAY, GRAY
+    end
+
+    -- Alpha final (prioridad: opts.alpha > alpha del color > default)
+    local alpha = (opts.alpha ~= nil) and opts.alpha or (ca ~= nil and ca or 0.8)
+
+    local thickness = opts.thickness or 1
+    local padding   = opts.padding or 10
+
+    local label     = opts.label
+    local labelTpl  = opts.labelTemplate or "GameFontHighlightSmall"
+    local labelCol  = opts.labelColor or { 1, 1, 1, 1 }
+    local labelBgA  = opts.labelBgAlpha or 0.85
+
+    local holderH
+    if opts.height then
+        holderH = opts.height
+    else
+        holderH = label and (thickness + 14) or thickness
+    end
+
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(w, holderH)
+    holder:SetPoint(point, rel, relPoint, x, y)
+
+    -- Línea principal (se partirá si hay label)
+    local lineL = holder:CreateTexture(nil, "ARTWORK")
+    lineL:SetColorTexture(cr, cg, cb, alpha)
+    lineL:SetHeight(thickness)
+    lineL:SetPoint("LEFT", holder, "LEFT", 0, 0)
+    lineL:SetPoint("RIGHT", holder, "RIGHT", 0, 0)
+
+    holder._lineL = lineL
+
+    if label and label ~= "" then
+        local fs = holder:CreateFontString(nil, "OVERLAY", labelTpl)
+        fs:SetText(label)
+        fs:SetTextColor(labelCol[1], labelCol[2], labelCol[3], labelCol[4] or 1)
+        fs:SetPoint("CENTER", holder, "CENTER", 0, 0)
+
+        holder.Label = fs
+
+        local bg = CreateFrame("Frame", nil, holder, "BackdropTemplate")
+        bg:SetFrameLevel(holder:GetFrameLevel() + 1)
+        bg:SetPoint("CENTER", fs, "CENTER", 0, 0)
+        bg:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = nil,
+            tile = false,
+            edgeSize = 0,
+        })
+        bg:SetBackdropColor(0, 0, 0, labelBgA)
+
+        local function UpdateCut()
+            local tw = fs:GetStringWidth() or 0
+            local th = fs:GetStringHeight() or 0
+            bg:SetSize(tw + (padding * 2), math.max(th + 4, 14))
+        end
+        UpdateCut()
+
+        local lineR = holder:CreateTexture(nil, "ARTWORK")
+        lineR:SetColorTexture(cr, cg, cb, alpha)
+        lineR:SetHeight(thickness)
+
+        lineL:ClearAllPoints()
+        lineL:SetPoint("LEFT", holder, "LEFT", 0, 0)
+        lineL:SetPoint("RIGHT", bg, "LEFT", -padding, 0)
+
+        lineR:SetPoint("LEFT", bg, "RIGHT", padding, 0)
+        lineR:SetPoint("RIGHT", holder, "RIGHT", 0, 0)
+
+        holder._lineR = lineR
+        holder._labelBG = bg
+        holder._updateCut = UpdateCut
+    end
+
+    return holder
+end
+
 -------------------------------------------------
 -- Panel style
 -------------------------------------------------
