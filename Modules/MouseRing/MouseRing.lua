@@ -169,6 +169,10 @@ function MouseRing:OnDisabled()
     self.enabled = false
     if self.db then self.db.enabled = false end
 
+    if self.__initialized then
+        self.__initialized = false
+    end
+
     -- Stop ticker
     if self.ticker then
         self.ticker:Cancel()
