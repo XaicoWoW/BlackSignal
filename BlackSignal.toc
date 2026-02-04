@@ -36,7 +36,7 @@ Modules/MouseRing/MouseRing.lua
 Modules/EnemyCastList/EnemyCastList.lua
 Modules/TeleportButtons/TeleportButtons.lua
 Modules/CombatTime/CombatTime.lua
-Modules/BuffTracker/BuffTracker.lua
-Modules/BuffTracker/Data.lua
 Modules/BuffTracker/Engine.lua
+Modules/BuffTracker/Data.lua
 Modules/BuffTracker/UI.lua
+Modules/BuffTracker/BuffTracker.lua

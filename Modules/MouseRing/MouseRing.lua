@@ -1,10 +1,19 @@
--- Modules/MouseRing.lua
+-- Modules/MouseRing/MouseRing.lua
+--- MouseRing Module
+-- Muestra 2 anillos concéntricos alrededor del cursor:
+-- 1. Cursor Ring (anillo decorativo base, el más pequeño - dentro)
+-- 2. GCD Spinner (arco creciente, tamaño medio)
+--
+-- Efecto: Arco creciente (swipe) desde vacío hasta lleno, horario, sin brillo
+-- Orden: De dentro hacia fuera (Cursor Ring → GCD)
+--
 -- @module MouseRing
 -- @alias MouseRing
 
 local _, BS = ...
-local DB    = BS.DB
-local API   = BS.API
+local DB     = BS.DB
+local API    = BS.API
+local Events = BS.Events
 
 local MouseRing = {
     name    = "BS_CR",
@@ -16,29 +25,36 @@ local MouseRing = {
 API:Register(MouseRing)
 
 -------------------------------------------------
--- Defaults (para que Core/Config lo “entienda”)
+-- Constants / Locals
+-------------------------------------------------
+local GCD_SPELL_ID = 61304
+
+local GetTime = GetTime
+local GetSpellCooldown = (C_Spell and C_Spell.GetSpellCooldown) or GetSpellCooldown
+
+-------------------------------------------------
+-- Defaults
 -------------------------------------------------
 local defaults = {
-    enabled     = true,
+    enabled = true,
 
-    ringEnabled = true,
     size        = 48,
+    thickness   = 20,
 
-    ringAlpha   = 0.9, -- 0..1
-
-    -- 0..1
+    -- Color único para todos los anillos
     ringColorR  = 0,
     ringColorG  = 1,
     ringColorB  = 0,
-
-    thickness   = 20, -- 10/20/30/40 (px)
-
-    -- Para añadir el colorPicker en el panel de configuración
+    ringAlpha   = 0.9,
     colorPicker = true,
 
-    -- optional offsets (your code was using them but they weren't in defaults)
     x = 0,
     y = 0,
+
+    -- GCD settings
+    gcdEnabled      = true,
+    gcdShowOnly     = false,
+    gcdReverse      = true,  -- Invertido: true = normal, false = reverso
 }
 
 MouseRing.defaults = defaults
@@ -46,9 +62,33 @@ MouseRing.defaults = defaults
 -------------------------------------------------
 -- Helpers
 -------------------------------------------------
-local function Clamp(v, minV, maxV)
-    if v < minV then return minV end
-    if v > maxV then return maxV end
+local function HideCooldownText(cooldown)
+    if not cooldown then return end
+    for _, region in ipairs({ cooldown:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            region:SetAlpha(0)
+            region:Hide()
+            region:SetText("")
+            break
+        end
+    end
+end
+
+local function SetupCooldownTextHiding(cooldown)
+    if not cooldown then return end
+
+    -- Hook SetCooldown para ocultar el texto cada vez que se actualiza
+    hooksecurefunc(cooldown, "SetCooldown", function()
+        HideCooldownText(cooldown)
+    end)
+
+    -- Ocultar texto inicial
+    HideCooldownText(cooldown)
+end
+
+local function Clamp(v, a, b)
+    if v < a then return a end
+    if v > b then return b end
     return v
 end
 
@@ -59,131 +99,287 @@ local function ToNumber(v, fallback)
 end
 
 local function Clamp01(v)
-    return Clamp(v, 0, 1)
+    return Clamp(ToNumber(v, 0), 0, 1)
 end
 
-local function GetRingTexturePath(mdb)
-    local thickness = ToNumber(mdb.thickness, 20)
-    if thickness ~= 10 and thickness ~= 20 and thickness ~= 30 and thickness ~= 40 then
-        thickness = 20
+local function NormalizeThickness(t)
+    t = ToNumber(t, 20)
+    if t ~= 10 and t ~= 20 and t ~= 30 and t ~= 40 then
+        t = 20
     end
-    return string.format("Interface\\AddOns\\BlackSignal\\Media\\Ring_%dpx.tga", thickness)
+    return t
+end
+
+local function GetRingTexturePath(db)
+    local t = NormalizeThickness(db.thickness)
+    return ("Interface\\AddOns\\BlackSignal\\Media\\Ring_%dpx.tga"):format(t)
+end
+
+local function GetGCDCooldownInfo()
+    local cd = GetSpellCooldown(GCD_SPELL_ID)
+    if not cd then return false, 0, 0 end
+
+    local start = cd.startTime or cd[1] or 0
+    local dur   = cd.duration  or cd[2] or 0
+    local en    = cd.isEnabled
+
+    if en ~= nil and not en then return false, 0, 0 end
+    if dur <= 0 or dur > 2.5 then return false, 0, 0 end
+    if start <= 0 then return false, 0, 0 end
+    if (start + dur) <= GetTime() then return false, 0, 0 end
+
+    return true, start, dur
 end
 
 -------------------------------------------------
--- Core
+-- Core Layout
 -------------------------------------------------
-function MouseRing:ApplySettings()
-    if not self.frame or not self.texture or not self.db then return end
-    local mdb = self.db
 
-    local size  = Clamp(ToNumber(mdb.size, 48), 12, 256)
-    local alpha = Clamp01(ToNumber(mdb.ringAlpha, 1))
+function MouseRing:CalculateSizes()
+    local db = self.db
+    local baseSize = Clamp(ToNumber(db.size, 48), 12, 256)
 
-    local r = Clamp01(ToNumber(mdb.ringColorR, 0))
-    local g = Clamp01(ToNumber(mdb.ringColorG, 1))
-    local b = Clamp01(ToNumber(mdb.ringColorB, 0))
+    local gcdSize = baseSize * 1.25
+    local outset = gcdSize * 0.18
+    local holderSize = gcdSize + (outset * 2)
 
-    self.frame:SetSize(size, size)
-
-    local path = GetRingTexturePath(mdb)
-    self.texture:SetTexture(path)
-
-    -- IMPORTANT:
-    -- "ADD" makes black invisible. Use "BLEND" so (0,0,0,alpha) still renders.
-    -- If you *really* wanted additive glow, you'd need a non-black texture/color.
-    self.texture:SetBlendMode("BLEND")
-
-    -- Apply color + alpha predictably
-    self.texture:SetVertexColor(r, g, b)
-    self.texture:SetAlpha(alpha)
+    return baseSize, gcdSize, holderSize
 end
 
-function MouseRing:Update()
-    if not self.frame or not self.db then return end
+function MouseRing:Layout()
+    if not self.holder or not self.db then return end
 
-    -- Respeta el toggle del Config genérico (module.db.enabled) + el propio ringEnabled
-    local show = (self.db.enabled ~= false) and (self.db.ringEnabled ~= false)
+    local baseSize, gcdSize, holderSize = self:CalculateSizes()
 
-    self.frame:SetShown(show)
+    self.holder:SetSize(holderSize, holderSize)
+
+    -- Cursor Ring (DENTRO)
+    self.ringFrame:SetSize(baseSize, baseSize)
+    self.ringFrame:ClearAllPoints()
+    self.ringFrame:SetPoint("CENTER", self.holder, "CENTER", 0, 0)
+
+    -- GCD Cooldown Frame (MEDIO) - Verificar que existe
+    if self.gcdCooldown then
+        self.gcdCooldown:SetSize(gcdSize, gcdSize)
+        self.gcdCooldown:ClearAllPoints()
+        self.gcdCooldown:SetPoint("CENTER", self.holder, "CENTER", 0, 0)
+    end
+end
+
+function MouseRing:ApplyRing()
+    if not self.ringTex or not self.ringFrame or not self.db then return end
+    local db = self.db
+
+    self.ringTex:SetTexture(GetRingTexturePath(db))
+    self.ringTex:SetVertexColor(
+        Clamp01(db.ringColorR),
+        Clamp01(db.ringColorG),
+        Clamp01(db.ringColorB)
+    )
+    self.ringTex:SetAlpha(Clamp01(db.ringAlpha))
+
+    self:Layout()
+end
+
+function MouseRing:ApplyGCDStyle()
+    if not self.gcdCooldown or not self.db then return end
+    local db = self.db
+
+    local r, g, b, a = Clamp01(db.ringColorR), Clamp01(db.ringColorG), Clamp01(db.ringColorB), Clamp01(db.ringAlpha)
+
+    self.gcdCooldown:SetSwipeTexture(GetRingTexturePath(db))
+    self.gcdCooldown:SetSwipeColor(r, g, b, a)
+    -- Invertir lógica: true = normal, false = reverso
+    self.gcdCooldown:SetReverse(not (db.gcdReverse == true))
+    self.gcdReverse = db.gcdReverse == true
+end
+
+-------------------------------------------------
+-- Update Logic
+-------------------------------------------------
+
+function MouseRing:UpdateGCD()
+    if not self.db or not self.gcdCooldown then return end
+    local db = self.db
+
+    if db.gcdEnabled == false then
+        self.gcdCooldown:Hide()
+        self._gcdActive = false
+        self._gcdStart, self._gcdDur = nil, nil
+
+        if db.gcdShowOnly == true and self.holder then
+            self.holder:Hide()
+        end
+        return
+    end
+
+    local active, start, dur = GetGCDCooldownInfo()
+
+    if not active then
+        self.gcdCooldown:Hide()
+        self._gcdActive = false
+        self._gcdStart, self._gcdDur = nil, nil
+
+        if db.gcdShowOnly == true and self.holder then
+            self.holder:Hide()
+        end
+        return
+    end
+
+    self._gcdActive = true
+
+    -- Solo resetear si es un GCD nuevo (anti-tirones)
+    if self._gcdStart ~= start or self._gcdDur ~= dur then
+        self._gcdStart = start
+        self._gcdDur = dur
+        self.gcdCooldown:SetCooldown(start, dur)
+    end
+
+    self.gcdCooldown:Show()
+
+    if db.gcdShowOnly == true and self.holder then
+        self.holder:Show()
+    end
+end
+
+function MouseRing:Update(refreshLayout)
+    if not self.holder or not self.db then return end
+    local db = self.db
+
+    local show = (db.enabled ~= false)
+
+    if show and db.gcdShowOnly == true then
+        local active = GetGCDCooldownInfo()
+        show = active
+    end
+
+    self.holder:SetShown(show)
+
     if show then
-        self:ApplySettings()
+        if refreshLayout then
+            self:ApplyRing()
+            self:ApplyGCDStyle()
+            self:Layout()
+        end
+
+        self:UpdateGCD()
+    else
+        if self.gcdCooldown then self.gcdCooldown:Hide() end
+        self._gcdActive = false
+        self._gcdStart, self._gcdDur = nil, nil
     end
 end
 
+-------------------------------------------------
+-- Events
+-------------------------------------------------
+MouseRing.events.PLAYER_ENTERING_WORLD = function(self)
+    self:Update(true)
+end
+
+MouseRing.events.SPELL_UPDATE_COOLDOWN = function(self)
+    self:UpdateGCD()
+end
+
+-------------------------------------------------
+-- Options Application
+-------------------------------------------------
+function MouseRing:ApplyOptions()
+    if not self.holder or not self.db then return end
+
+    self.db = DB:EnsureDB(self.name, defaults)
+
+    self:ApplyRing()
+    self:ApplyGCDStyle()
+    self:Layout()
+
+    self:Update(true)
+end
+
+-------------------------------------------------
+-- Lifecycle
+-------------------------------------------------
 function MouseRing:OnInit()
     self.db = DB:EnsureDB(self.name, defaults)
     self.enabled = (self.db.enabled ~= false)
 
-    if self.__initialized and self.frame then
-        self:Update()
+    if self.__initialized and self.holder then
+        self:Update(true)
         return
     end
     self.__initialized = true
 
-    local ring = CreateFrame("Frame", "BS_MouseRing", UIParent)
-    ring:SetFrameStrata("TOOLTIP")
-    ring:Hide()
+    local holder = CreateFrame("Frame", "BS_MouseRingHolder", UIParent)
+    holder:SetFrameStrata("TOOLTIP")
+    holder:SetFrameLevel(200)
+    holder:Hide()
+    self.holder = holder
 
-    local tex = ring:CreateTexture(nil, "OVERLAY")
-    tex:SetAllPoints()
+    -- Cursor Ring (DENTRO)
+    local ringFrame = CreateFrame("Frame", "$parent_Ring", holder)
+    ringFrame:SetFrameStrata("TOOLTIP")
+    ringFrame:SetFrameLevel(holder:GetFrameLevel() + 1)
+    self.ringFrame = ringFrame
 
-    -- NOTE: Blend mode is set in ApplySettings()
+    local ringTex = ringFrame:CreateTexture(nil, "BACKGROUND", nil, 0)
+    ringTex:SetAllPoints(ringFrame)
+    ringTex:SetBlendMode("BLEND")
+    self.ringTex = ringTex
 
-    self.frame = ring
-    self.texture = tex
+    -- GCD Cooldown Frame (MEDIO) - Efecto swipe de arco creciente
+    local gcdCooldown = CreateFrame("Cooldown", "$parent_GCD", holder, "CooldownFrameTemplate")
+    gcdCooldown:SetFrameStrata("TOOLTIP")
+    gcdCooldown:SetFrameLevel(holder:GetFrameLevel() + 2)
+    gcdCooldown:SetDrawEdge(false)
+    gcdCooldown:SetDrawBling(false)
+    gcdCooldown:SetDrawSwipe(true)
+    gcdCooldown:SetSwipeTexture(GetRingTexturePath(self.db))
+    gcdCooldown:Hide()
+    SetupCooldownTextHiding(gcdCooldown)
+    self.gcdCooldown = gcdCooldown
 
-    -- Follow cursor (while visible)
-    ring:ClearAllPoints()
-    ring:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    self._gcdActive = false
+    self._gcdStart, self._gcdDur = nil, nil
+    self.gcdReverse = false
 
-    ring:SetScript("OnUpdate", function()
-        if not ring:IsShown() then return end
+    Events:RegisterEvent("PLAYER_ENTERING_WORLD")
+    Events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+
+    local lastX, lastY
+
+    holder:SetScript("OnUpdate", function()
+        if not holder:IsShown() then return end
 
         local cx, cy = GetCursorPosition()
-        local scale  = UIParent:GetEffectiveScale()
 
-        local ox = ToNumber(self.db.x, 0)
-        local oy = ToNumber(self.db.y, 0)
+        if cx ~= lastX or cy ~= lastY then
+            lastX, lastY = cx, cy
 
-        ring:ClearAllPoints()
-        ring:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (cx / scale) + ox, (cy / scale) + oy)
+            local scale = UIParent:GetEffectiveScale()
+            local ox = ToNumber(self.db.x, 0)
+            local oy = ToNumber(self.db.y, 0)
+
+            holder:ClearAllPoints()
+            holder:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (cx / scale) + ox, (cy / scale) + oy)
+        end
     end)
 
-    -- Light ticker for show/hide + settings
-    if self.ticker then
-        self.ticker:Cancel()
-        self.ticker = nil
-    end
-    self.ticker = C_Timer.NewTicker(0.10, function()
-        self:Update()
-    end)
-
-    self:ApplySettings()
-    self:Update()
+    self:Update(true)
 end
-
 
 function MouseRing:OnDisabled()
     self.db = DB:EnsureDB(self.name, defaults)
     self.enabled = false
     if self.db then self.db.enabled = false end
-
-    if self.__initialized then
-        self.__initialized = false
-    end
-
-    -- Stop ticker
-    if self.ticker then
-        self.ticker:Cancel()
-        self.ticker = nil
+    
+    if BS.Tickers and BS.Tickers.Stop then
+        BS.Tickers:Stop(self)
     end
 
     -- Hide UI immediately
     if self.frame then
         self.frame:Hide()
-
-        -- Optional: detach scripts to avoid any accidental work
-        self.frame:SetScript("OnUpdate", nil)
     end
+    self._gcdActive = false
+    self._gcdStart, self._gcdDur = nil, nil
 end

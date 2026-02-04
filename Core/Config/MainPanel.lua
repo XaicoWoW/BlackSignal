@@ -11,7 +11,7 @@ local UI = BS.UI
 local ConfigFrame
 
 local PANEL_W = 840 -- Panel width
-local PANEL_H = 535 -- Panel height
+local PANEL_H = 600 -- Panel height
 
 ---------------------------------------------------------------+
 ----- Main Panel Toggle Functionality

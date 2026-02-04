@@ -9,12 +9,47 @@ BS.Events    = BS.Events or CreateFrame("Frame")
 --- Event frame to handle and dispatch events to modules
 local f = BS.Events
 
---- Event handler to dispatch events to registered module event handlers
-f:SetScript("OnEvent", function(_, event, ...)
+--- Table to track unit events and their filters
+local unitEventFilters = {}
+
+--- Register a unit event with a filter
+--- @param event string The event to register
+--- @param unit string The unit to filter for (e.g., "player", "target")
+function f:RegisterUnitEvent(event, unit)
+  -- Initialize the event filter table if needed
+  if not unitEventFilters[event] then
+    unitEventFilters[event] = {}
+    -- Register the event with the frame
+    f:RegisterEvent(event)
+  end
+
+  -- Track that we're interested in this unit for this event
+  unitEventFilters[event][unit] = true
+end
+
+--- Original event dispatch (for non-unit events)
+local function dispatchNormalEvent(event, ...)
   for _, module in pairs(BS.API.modules) do
     if module and module.events and module.events[event] then
       module.events[event](module, ...)
     end
+  end
+end
+
+--- Event handler to dispatch events to modules with unit filtering
+f:SetScript("OnEvent", function(_, event, ...)
+  -- Check if this event has unit filters
+  if unitEventFilters[event] then
+    -- Get the first argument (the unit for UNIT_* events)
+    local unit = ...
+
+    -- Only dispatch if we're interested in this unit
+    if unit and unitEventFilters[event][unit] then
+      dispatchNormalEvent(event, ...)
+    end
+  else
+    -- No unit filter, dispatch normally
+    dispatchNormalEvent(event, ...)
   end
 end)
 

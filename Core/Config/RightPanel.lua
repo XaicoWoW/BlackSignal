@@ -417,6 +417,22 @@ local function CreateModuleContent(parent, module, opts)
         lastAnchor = lbl
     end
 
+    -- MouseRing-specific options
+    if module.name == "BS_CR" then
+        -- Separator for GCD Conditions
+        local optTitle = UI:CreateText(f, "GCD Conditions", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -28,
+            "GameFontHighlight")
+        local sep = UI:CreateSeparator(f, 520, "TOPLEFT", optTitle, "BOTTOMLEFT", 0, -10,
+            { color = BS.Colors.Brand.primary, alpha = 1, thickness = 1 })
+        lastAnchor = sep
+
+        AddBoolOption("gcdEnabled", "Enable GCD Tracker")
+        AddBoolOption("gcdShowOnly", "Show Only During GCD")
+        AddBoolOption("gcdReverse", "Reverse GCD Direction")
+        -- AddBoolOption("castEnabled", "Enable Cast Timer")
+        -- AddBoolOption("castReverse", "Reverse Cast Direction")
+    end
+
     if module.db.showOptions == true then
         local optTitle = UI:CreateText(f, "Visibility conditions", "TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -28,
             "GameFontHighlight")
@@ -469,6 +485,13 @@ local function CreateModuleContent(parent, module, opts)
             if d.showOnlyInInstance ~= nil then module.db.showOnlyInInstance = d.showOnlyInInstance end
             if d.showOnlyPlayerClassBuff ~= nil then module.db.showOnlyPlayerClassBuff = d.showOnlyPlayerClassBuff end
             if d.showOnlyPlayerMissing ~= nil then module.db.showOnlyPlayerMissing = d.showOnlyPlayerMissing end
+
+            -- MouseRing-specific defaults
+            if module.name == "BS_CR" then
+                if d.gcdEnabled ~= nil then module.db.gcdEnabled = d.gcdEnabled end
+                if d.gcdShowOnly ~= nil then module.db.gcdShowOnly = d.gcdShowOnly end
+                if d.gcdReverse ~= nil then module.db.gcdReverse = d.gcdReverse end
+            end
 
             if d.showOnlyOnReadyCheck ~= nil then module.db.showOnlyOnReadyCheck = d.showOnlyOnReadyCheck end
             if d.readyCheckDuration ~= nil then module.db.readyCheckDuration = d.readyCheckDuration end

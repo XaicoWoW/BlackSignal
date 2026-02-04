@@ -142,6 +142,10 @@ function BuffTracker:OnInit()
     self.enabled = (self.db.enabled ~= false)
 
     EnsureDeps(self)
+    if not self.Engine or not self.UI then
+        -- Si por lo que sea aún no están cargados, no crashees
+        return
+    end
     self.UI:Ensure(self)
 
     local root = self.UI:GetRootFrame()

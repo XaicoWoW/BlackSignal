@@ -19,4 +19,6 @@ $RECYCLE.BIN/
 .vs
 
 # Jetbrains local config
-.idea
+.ideaP
+
+.claude
