@@ -1,6 +1,6 @@
-local _, BS = ...;
-BS.Button = {};
+local BS = _G.BS;
 
+-- Use the table created by Init.lua, don't create a new one
 local Button = BS.Button;
 
 local function ApplyStyle(btn, opts)

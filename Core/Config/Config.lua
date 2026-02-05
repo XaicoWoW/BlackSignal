@@ -1,5 +1,5 @@
 -- Core/Config.lua
-local _, BS = ...
+local BS = _G.BS
 
 local DB    = BS.DB
 local UI    = BS.UI

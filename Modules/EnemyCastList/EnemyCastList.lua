@@ -1,162 +1,52 @@
--- Modules/EnemyCastList.lua
+-- Modules/EnemyCastList/EnemyCastList.lua
 -- @module EnemyCastList
 -- @alias EnemyCastList
 
-local _, BS     = ...;
-
-local API       = BS.API
-local DB        = BS.DB
-local Tickers   = BS.Tickers
-
-local EnemyCastList = {
-    name    = "BS_ECL",
-    label   = "Enemy Cast List",
-    enabled = true,
-    events  = {},
-}
-
-API:Register(EnemyCastList)
+local BS = _G.BS
 
 -------------------------------------------------
--- Constants / Defaults
+-- Create as an Ace3 Module
 -------------------------------------------------
-local FONT = "Fonts\\FRIZQT__.TTF"
+local EnemyCastList = BS.Addon:NewModule("EnemyCastList", "AceEvent-3.0", "AceTimer-3.0")
 
-local defaults = {
+-------------------------------------------------
+-- Module Metadata (for BS.API compatibility)
+-------------------------------------------------
+EnemyCastList.name = "BS_ECL"
+EnemyCastList.label = "Enemy Cast List"
+EnemyCastList.enabled = true
+EnemyCastList.defaults = {
     enabled = true,
-
     x = 0,
     y = -40,
-
     width = 460,
     maxLines = 10,
-
     fontSize = 14,
-    font = FONT,
-
+    font = "Fonts\\FRIZQT__.TTF",
     updateInterval = 0.05,
-
     channelHoldSeconds = 0.20,
     onlyTargetingMe = true,
     alphaTargetingMe = 1.0,
     alphaNotTargetingMe = 0.0,
     onlyWhilePlayerInCombat = true,
     onlyHostile = true,
-
     showChannels = true,
-
     debugAlwaysShow = false,
     noTargetText = "(sin target)",
 }
 
-EnemyCastList.defaults = defaults
-function EnemyCastList:BuildDefaults()
-    return defaults
-end
+-------------------------------------------------
+-- Register with BS.API (for Config panel compatibility)
+-------------------------------------------------
+BS.API:Register(EnemyCastList)
 
 -------------------------------------------------
--- Local event frame (avoid Core taint)
+-- Constants / Locals
 -------------------------------------------------
-function EnemyCastList:EnsureEventFrame()
-    if self.eventFrame then return end
+local FONT = "Fonts\\FRIZQT__.TTF"
 
-    local ef = CreateFrame("Frame", "BS_EnemyCastList_EventFrame")
-    ef:SetScript("OnEvent", function(_, event, ...)
-        local fn = self.events and self.events[event]
-        if fn then fn(self, ...) end
-    end)
+local GetSpellCooldown = C_Spell.GetSpellCooldown
 
-    self.eventFrame = ef
-end
-
-function EnemyCastList:RegisterLocalEvent(eventName)
-    if not self.eventFrame then return end
-    pcall(function() self.eventFrame:RegisterEvent(eventName) end)
-end
-
-function EnemyCastList:UnregisterAllLocalEvents()
-    if not self.eventFrame then return end
-    pcall(function() self.eventFrame:UnregisterAllEvents() end)
-end
-
--------------------------------------------------
--- UI
--------------------------------------------------
-local function EnsureUI(self)
-    if self.frame and self.lines then return end
-
-    local f = CreateFrame("Frame", "BS_EnemyCastList", UIParent)
-    f:SetFrameStrata("LOW")
-    f:Hide()
-
-    self.frame = f
-    self.lines = {}
-    for i = 1, (defaults.maxLines or 6) do
-        local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        t:SetJustifyH("LEFT")
-        t:SetTextColor(1, 1, 1, 1)
-        t:Hide()
-        self.lines[i] = t
-    end
-end
-
-local function ApplyPosition(self)
-    self.frame:ClearAllPoints()
-    self.frame:SetPoint("CENTER", UIParent, "CENTER", self.db.x or 0, self.db.y or -40)
-end
-
-local function ApplySizeAndLayout(self)
-    local w = tonumber(self.db.width) or defaults.width
-    local maxLines = tonumber(self.db.maxLines) or defaults.maxLines
-    if maxLines < 1 then maxLines = 1 end
-    if maxLines > 20 then maxLines = 20 end
-
-    local fs = tonumber(self.db.fontSize) or defaults.fontSize
-    local lineH = fs + 2
-
-    self.frame:SetSize(w, maxLines * lineH)
-
-    -- asegura líneas suficientes
-    for i = 1, maxLines do
-        if not self.lines[i] then
-            local t = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-            t:SetJustifyH("LEFT")
-            t:SetTextColor(1, 1, 1, 1)
-            t:Hide()
-            self.lines[i] = t
-        end
-    end
-
-    for i = 1, #self.lines do
-        local t = self.lines[i]
-        if t then
-            t:ClearAllPoints()
-            t:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, -((i - 1) * lineH))
-        end
-    end
-end
-
-local function ApplyFont(self)
-    local fontPath = self.db.font or FONT
-    local fs = tonumber(self.db.fontSize) or defaults.fontSize
-    local fallbackFont, fallbackSize, fallbackFlags = GameFontNormal:GetFont()
-
-    for i = 1, #self.lines do
-        local t = self.lines[i]
-        if t then
-            local ok = pcall(function()
-                t:SetFont(fontPath, fs, "OUTLINE")
-            end)
-            if not ok then
-                t:SetFont(fallbackFont, fs or fallbackSize or 14, fallbackFlags or "OUTLINE")
-            end
-        end
-    end
-end
-
--------------------------------------------------
--- Color helpers (target colored by class if player; else by reaction)
--------------------------------------------------
 local function HexFromRGB(r, g, b)
     r = math.floor((r or 1) * 255 + 0.5)
     g = math.floor((g or 1) * 255 + 0.5)
@@ -179,7 +69,6 @@ local function GetColoredUnitName(unit)
     local name = GetUnitFullName(unit)
     if not name then return nil end
 
-    -- Player: class color
     if UnitIsPlayer(unit) then
         local _, classFile = UnitClass(unit)
         local c = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
@@ -189,7 +78,6 @@ local function GetColoredUnitName(unit)
         return name
     end
 
-    -- NPC: reaction color
     local reaction = UnitReaction(unit, "player")
     if reaction and FACTION_BAR_COLORS and FACTION_BAR_COLORS[reaction] then
         local c = FACTION_BAR_COLORS[reaction]
@@ -197,14 +85,6 @@ local function GetColoredUnitName(unit)
     end
 
     return name
-end
-
--------------------------------------------------
--- State
--------------------------------------------------
-function EnemyCastList:Reset()
-    self.units = {} -- [unit] = true
-    self.casts = {} -- [unit] = { spellName, casterName, targetName }
 end
 
 local function IsUnitValidHostile(self, unit)
@@ -232,16 +112,99 @@ local function TryGetUnitTargetName(unit, noTargetText)
     return noTargetText or "(sin target)"
 end
 
+-------------------------------------------------
+-- State
+-------------------------------------------------
+function EnemyCastList:Reset()
+    self.units = {}
+    self.casts = {}
+end
+
+-------------------------------------------------
+-- UI
+-------------------------------------------------
+local function EnsureUI(self)
+    if self.frame and self.lines then return end
+
+    local f = CreateFrame("Frame", "BS_EnemyCastList", UIParent)
+    f:SetFrameStrata("LOW")
+    f:Hide()
+
+    self.frame = f
+    self.lines = {}
+    for i = 1, (self.defaults.maxLines or 6) do
+        local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        t:SetJustifyH("LEFT")
+        t:SetTextColor(1, 1, 1, 1)
+        t:Hide()
+        self.lines[i] = t
+    end
+end
+
+local function ApplyPosition(self)
+    self.frame:ClearAllPoints()
+    self.frame:SetPoint("CENTER", UIParent, "CENTER", self.db.x or 0, self.db.y or -40)
+end
+
+local function ApplySizeAndLayout(self)
+    local w = tonumber(self.db.width) or self.defaults.width
+    local maxLines = tonumber(self.db.maxLines) or self.defaults.maxLines
+    if maxLines < 1 then maxLines = 1 end
+    if maxLines > 20 then maxLines = 20 end
+
+    local fs = tonumber(self.db.fontSize) or self.defaults.fontSize
+    local lineH = fs + 2
+
+    self.frame:SetSize(w, maxLines * lineH)
+
+    for i = 1, maxLines do
+        if not self.lines[i] then
+            local t = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            t:SetJustifyH("LEFT")
+            t:SetTextColor(1, 1, 1, 1)
+            t:Hide()
+            self.lines[i] = t
+        end
+    end
+
+    for i = 1, #self.lines do
+        local t = self.lines[i]
+        if t then
+            t:ClearAllPoints()
+            t:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, -((i - 1) * lineH))
+        end
+    end
+end
+
+local function ApplyFont(self)
+    local fontPath = self.db.font or FONT
+    local fs = tonumber(self.db.fontSize) or self.defaults.fontSize
+    local fallbackFont, fallbackSize, fallbackFlags = GameFontNormal:GetFont()
+
+    for i = 1, #self.lines do
+        local t = self.lines[i]
+        if t then
+            local ok = pcall(function()
+                t:SetFont(fontPath, fs, "OUTLINE")
+            end)
+            if not ok then
+                t:SetFont(fallbackFont, fs or fallbackSize or 14, fallbackFlags or "OUTLINE")
+            end
+        end
+    end
+end
+
+-------------------------------------------------
+-- Read Unit Cast
+-------------------------------------------------
 function EnemyCastList:ReadUnitCast(unit)
     if not UnitExists(unit) then return nil end
 
     local now = GetTime()
 
-    -- Casting
     local spellName, _, _, _, _, _ = UnitCastingInfo(unit)
     local isChannel = false
 
-    -- Channeling
     if not spellName and (self.db.showChannels ~= false) then
         spellName, _, _, _, _, _ = UnitChannelInfo(unit)
         if spellName then isChannel = true end
@@ -252,9 +215,7 @@ function EnemyCastList:ReadUnitCast(unit)
     local casterName = UnitName(unit) or unit
     local targetName = TryGetUnitTargetName(unit, self.db.noTargetText)
 
-    local hold = tonumber(self.db.channelHoldSeconds)
-        or tonumber(defaults.channelHoldSeconds)
-        or 0.20
+    local hold = tonumber(self.db.channelHoldSeconds) or tonumber(self.defaults.channelHoldSeconds) or 0.20
 
     return {
         unit = unit,
@@ -262,14 +223,11 @@ function EnemyCastList:ReadUnitCast(unit)
         spellName = spellName,
         targetName = targetName,
         isChannel = isChannel,
-
-        -- ✅ estado para alpha + anti-flicker
         targetingMe = IsTargetingPlayer(unit),
-        holdUntil = now + (isChannel and hold or 0), -- solo aplicamos “hold” a canalizadas
+        holdUntil = now + (isChannel and hold or 0),
         lastSeen = now,
     }
 end
-
 
 function EnemyCastList:RefreshAll()
     local now = GetTime()
@@ -279,13 +237,10 @@ function EnemyCastList:RefreshAll()
             local c = self:ReadUnitCast(unit)
 
             if c then
-                -- cast “fresco”
                 self.casts[unit] = c
             else
-                -- si no hay info ahora, intenta mantener el último estado un poco (anti-flicker)
                 local prev = self.casts[unit]
                 if prev and prev.isChannel and prev.holdUntil and now < prev.holdUntil then
-                    -- refresca target/alpha aunque el channel “parpadee” en API
                     prev.targetName = TryGetUnitTargetName(unit, self.db.noTargetText)
                     prev.targetingMe = IsTargetingPlayer(unit)
                     prev.lastSeen = now
@@ -299,7 +254,6 @@ function EnemyCastList:RefreshAll()
         end
     end
 end
-
 
 -------------------------------------------------
 -- Rendering
@@ -324,7 +278,7 @@ function EnemyCastList:Update()
         return
     end
 
-    local maxLines = tonumber(self.db.maxLines) or defaults.maxLines
+    local maxLines = tonumber(self.db.maxLines) or self.defaults.maxLines
     if maxLines < 1 then maxLines = 1 end
     if maxLines > 20 then maxLines = 20 end
 
@@ -401,110 +355,30 @@ function EnemyCastList:Update()
 end
 
 -------------------------------------------------
--- Ticker
+-- Ace3 Timer
 -------------------------------------------------
 function EnemyCastList:StartTicker()
-    Tickers:Stop(self)
-    local interval = tonumber(self.db and self.db.updateInterval) or defaults.updateInterval
+    if self.updateTimer then
+        self:CancelTimer(self.updateTimer)
+        self.updateTimer = nil
+    end
+
+    local interval = tonumber(self.db and self.db.updateInterval) or self.defaults.updateInterval
     if interval < 0.02 then interval = 0.02 end
 
-    Tickers:Register(self, interval, function()
-        self:RefreshAll()
-        self:Update()
-    end)
+    -- ScheduleRepeatingTimer expects (func, delay, ...) NOT (delay, func, ...)
+    self.updateTimer = self:ScheduleRepeatingTimer("TickerUpdate", interval)
+end
+
+function EnemyCastList:TickerUpdate()
+    self:RefreshAll()
+    self:Update()
 end
 
 -------------------------------------------------
--- Public hooks for Config UI
+-- Event Handlers (AceEvent style)
 -------------------------------------------------
-function EnemyCastList:ApplyOptions()
-    EnsureUI(self)
-    ApplyPosition(self)
-    ApplySizeAndLayout(self)
-    ApplyFont(self)
-    BS.Movers:Apply("EnemyCastList")
-    if self.enabled then
-        self:StartTicker()
-        self:RefreshAll()
-        self:Update()
-    else
-        if self.frame then self.frame:Hide() end
-        Tickers:Stop(self)
-    end
-end
-
--------------------------------------------------
--- Init
--------------------------------------------------
-function EnemyCastList:OnInit()
-    self.db = DB:EnsureDB(self.name, defaults)
-    self.enabled = (self.db.enabled ~= false)
-
-    EnsureUI(self)
-    ApplyPosition(self)
-    ApplySizeAndLayout(self)
-    ApplyFont(self)
-
-    BS.Movers:Register(self.frame, self.name, "Enemy Cast List")
-    self:Reset()
-
-    self.frame:SetShown(self.enabled)
-
-    if self.enabled then
-        self:StartTicker()
-        self:RefreshAll()
-        self:Update()
-    else
-        self.frame:Hide()
-        Tickers:Stop(self)
-    end
-
-    self:EnsureEventFrame()
-    self:UnregisterAllLocalEvents()
-
-    self:RegisterLocalEvent("NAME_PLATE_UNIT_ADDED")
-    self:RegisterLocalEvent("NAME_PLATE_UNIT_REMOVED")
-end
-
-function EnemyCastList:OnDisabled()
-    -- Refresh DB and force disabled
-    self.db = DB:EnsureDB(self.name, defaults)
-    self.enabled = false
-    if self.db then self.db.enabled = false end
-
-    -- Stop ticker / updates
-    if Tickers and Tickers.Stop then
-        Tickers:Stop(self)
-    elseif BS and BS.Tickers and BS.Tickers.Stop then
-        BS.Tickers:Stop(self)
-    elseif self.StopTicker then
-        self:StopTicker()
-    end
-
-    -- Unregister local events registered in OnInit
-    if self.UnregisterAllLocalEvents then
-        self:UnregisterAllLocalEvents()
-    end
-
-    -- Hide + reset UI/state
-    if self.frame then
-        self.frame:Hide()
-    end
-    if self.Reset then
-        self:Reset()
-    end
-
-    -- Optional: mover cleanup (keep only if your movers system expects removal on disable)
-    if BS and BS.Movers and BS.Movers.Unregister and self.frame then
-        BS.Movers:Unregister(self.frame, self.name)
-    end
-end
-
-
--------------------------------------------------
--- Events
--------------------------------------------------
-EnemyCastList.events.NAME_PLATE_UNIT_ADDED = function(self, unit)
+function EnemyCastList:OnNamePlateAdded(unit)
     if not self.enabled then return end
     if not unit then return end
     if not IsUnitValidHostile(self, unit) then return end
@@ -517,7 +391,7 @@ EnemyCastList.events.NAME_PLATE_UNIT_ADDED = function(self, unit)
     self:Update()
 end
 
-EnemyCastList.events.NAME_PLATE_UNIT_REMOVED = function(self, unit)
+function EnemyCastList:OnNamePlateRemoved(unit)
     if not self.enabled then return end
     if not unit then return end
 
@@ -525,4 +399,86 @@ EnemyCastList.events.NAME_PLATE_UNIT_REMOVED = function(self, unit)
     self.casts[unit] = nil
 
     self:Update()
+end
+
+-------------------------------------------------
+-- Ace3 Lifecycle Callbacks
+-------------------------------------------------
+function EnemyCastList:OnInitialize()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = (self.db.enabled ~= false)
+end
+
+function EnemyCastList:OnEnable()
+    self:OnInitialize()
+
+    EnsureUI(self)
+    ApplyPosition(self)
+    ApplySizeAndLayout(self)
+    ApplyFont(self)
+
+    if BS.Movers then
+        BS.Movers:Register(self.frame, self.name, "Enemy Cast List")
+    end
+
+    self:Reset()
+
+    self.frame:SetShown(self.enabled)
+
+    if self.enabled then
+        self:StartTicker()
+        self:RefreshAll()
+        self:Update()
+    else
+        self.frame:Hide()
+        if self.updateTimer then
+            self:CancelTimer(self.updateTimer)
+            self.updateTimer = nil
+        end
+    end
+
+    -- Register events using AceEvent
+    self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnNamePlateAdded")
+    self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnNamePlateRemoved")
+end
+
+function EnemyCastList:OnDisable()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = false
+    if self.db then self.db.enabled = false end
+
+    if self.updateTimer then
+        self:CancelTimer(self.updateTimer)
+        self.updateTimer = nil
+    end
+
+    if self.frame then
+        self.frame:Hide()
+    end
+    self:Reset()
+
+    -- AceEvent automatically unregisters all events
+end
+
+-------------------------------------------------
+-- ApplyOptions (for Config panel)
+-------------------------------------------------
+function EnemyCastList:ApplyOptions()
+    EnsureUI(self)
+    ApplyPosition(self)
+    ApplySizeAndLayout(self)
+    ApplyFont(self)
+    BS.Movers:Apply("EnemyCastList")
+
+    if self.enabled then
+        self:StartTicker()
+        self:RefreshAll()
+        self:Update()
+    else
+        if self.frame then self.frame:Hide() end
+        if self.updateTimer then
+            self:CancelTimer(self.updateTimer)
+            self.updateTimer = nil
+        end
+    end
 end

@@ -1,127 +1,64 @@
--- Modules/FocusCastTracker.lua
+-- Modules/FocusCastTracker/FocusCastTracker.lua
 -- @module FocusCastTracker
 -- @alias FocusCastTracker
 
-local _, BS            = ...
+local BS = _G.BS
 
-local API              = BS.API
-local DB               = BS.DB
-local Tickers          = BS.Tickers
-local Events           = BS.Events
+-------------------------------------------------
+-- Create as an Ace3 Module
+-------------------------------------------------
+local FocusCastTracker = BS.Addon:NewModule("FocusCastTracker", "AceEvent-3.0", "AceTimer-3.0")
 
-local FocusCastTracker = {
-    name    = "BS_FCT",
-    label   = "Focus Cast Tracker",
+-------------------------------------------------
+-- Module Metadata (for BS.API compatibility)
+-------------------------------------------------
+FocusCastTracker.name = "BS_FCT"
+FocusCastTracker.label = "Focus Cast Tracker"
+FocusCastTracker.enabled = true
+FocusCastTracker.defaults = {
     enabled = true,
-    events  = {},
-}
-
-API:Register(FocusCastTracker)
-
--------------------------------------------------
--- Constants / Defaults
--------------------------------------------------
-local FONT = "Fonts\\FRIZQT__.TTF"
-
-local defaults = {
-    enabled             = true,
-    x                   = 0,
-    y                   = 200,
-    fontSize            = 16,
-    font                = FONT,
-
-    text                = "Interrupt",
-
-    updateInterval      = 0.05,
-
+    x = 0,
+    y = 200,
+    fontSize = 16,
+    font = "Fonts\\FRIZQT__.TTF",
+    text = "Interrupt",
+    updateInterval = 0.05,
     onlyShowIfKickReady = true,
 }
 
-FocusCastTracker.defaults = defaults
+-------------------------------------------------
+-- Register with BS.API (for Config panel compatibility)
+-------------------------------------------------
+BS.API:Register(FocusCastTracker)
 
+-------------------------------------------------
+-- Constants / Locals
+-------------------------------------------------
+local FONT = "Fonts\\FRIZQT__.TTF"
 local GetSpellCooldown = C_Spell.GetSpellCooldown
 
 local KICK_BY_CLASS = {
-    WARRIOR     = 6552,   -- Pummel
-    ROGUE       = 1766,   -- Kick
-    MAGE        = 2139,   -- Counterspell
-    HUNTER      = 147362, -- Counter Shot
-    SHAMAN      = 57994,  -- Wind Shear
-    DRUID       = 106839, -- Skull Bash
-    PALADIN     = 96231,  -- Rebuke
-    DEATHKNIGHT = 47528,  -- Mind Freeze
-    DEMONHUNTER = 183752, -- Disrupt
-    MONK        = 116705, -- Spear Hand Strike
-    WARLOCK     = 19647,  -- Spell Lock
-    EVOKER      = 351338, -- Quell
+    WARRIOR = 6552,
+    ROGUE = 1766,
+    MAGE = 2139,
+    HUNTER = 147362,
+    SHAMAN = 57994,
+    DRUID = 106839,
+    PALADIN = 96231,
+    DEATHKNIGHT = 47528,
+    DEMONHUNTER = 183752,
+    MONK = 116705,
+    WARLOCK = 19647,
+    EVOKER = 351338,
 }
 
--------------------------------------------------
--- UI
--------------------------------------------------
-local function EnsureUI(self)
-    if self.frame and self.text and not self.db then return end
-    local fontPath = self.db.font or FONT
-    local fontSize = tonumber(self.db.fontSize) or 16
-    local kickText = "Interrupt"
-
-    if self.db.text and self.db.text ~= "" then
-        kickText = self.db.text
-    end
-
-    local f = CreateFrame("Frame", "BS_FocusCastTrackerDisplay", UIParent)
-    f:SetSize(380, 30)
-    f:SetFrameStrata("LOW")
-    f:Hide()
-
-    -- Texto principal
-    local t = f:CreateFontString(nil, "OVERLAY")
-    t:SetPoint("CENTER")
-    t:SetJustifyH("CENTER")
-    t:SetTextColor(1, 1, 1, 1)
-
-    -- Badge "!" (no interrumpible)
-    local warn = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    warn:SetSize(18, 18)
-    warn:SetPoint("CENTER", f, "CENTER", 0, -fontSize)
-
-
-    local wt = warn:CreateFontString(nil, "OVERLAY")
-    wt:SetPoint("CENTER", warn, "CENTER", 0, -1)
-    wt:SetFont(fontPath, fontSize, "OUTLINE")
-    wt:SetTextColor(1.00, 0.15, 0.15, 1.00)
-    wt:SetText(kickText)
-
-    self.frame     = f
-    self.text      = t
-    self.warnFrame = warn
-end
-
-
-local function ApplyPosition(self)
-    if not self.frame or not self.db then return end
-    self.frame:ClearAllPoints()
-    self.frame:SetPoint("CENTER", UIParent, "CENTER", self.db.x or 0, self.db.y or -120)
-end
-
-local function ApplyFont(self)
-    if not self.text or not self.db then return end
-    local fontPath = self.db.font or FONT
-    self.text:SetFont(fontPath, tonumber(self.db.fontSize) or 16, "OUTLINE")
-end
-
--------------------------------------------------
--- Helpers
--------------------------------------------------
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 
 local function ColorizeText(text, color)
     if not text or not color then return text end
-
     if color.colorStr then
         return "|c" .. color.colorStr .. text .. "|r"
     end
-
     local r = math.floor((color.r or 1) * 255 + 0.5)
     local g = math.floor((color.g or 1) * 255 + 0.5)
     local b = math.floor((color.b or 1) * 255 + 0.5)
@@ -142,7 +79,6 @@ local function GetUnitNameColoredByClass(unit)
 end
 
 local function GetFocusTargetName()
-    -- IMPORTANT: correct unit token is "focustarget"
     if UnitExists("focustarget") then
         return GetUnitNameColoredByClass("focustarget")
     end
@@ -157,8 +93,57 @@ end
 local function IsKickReady(spellID)
     local cdInfo = GetSpellCooldown(spellID)
     local isOnGCD = cdInfo and cdInfo.isOnGCD
-
     return isOnGCD
+end
+
+-------------------------------------------------
+-- UI
+-------------------------------------------------
+local function EnsureUI(self)
+    if self.frame and self.text and not self.db then return end
+    local fontPath = self.db.font or FONT
+    local fontSize = tonumber(self.db.fontSize) or 16
+    local kickText = "Interrupt"
+
+    if self.db.text and self.db.text ~= "" then
+        kickText = self.db.text
+    end
+
+    local f = CreateFrame("Frame", "BS_FocusCastTrackerDisplay", UIParent)
+    f:SetSize(380, 30)
+    f:SetFrameStrata("LOW")
+    f:Hide()
+
+    local t = f:CreateFontString(nil, "OVERLAY")
+    t:SetPoint("CENTER")
+    t:SetJustifyH("CENTER")
+    t:SetTextColor(1, 1, 1, 1)
+
+    local warn = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    warn:SetSize(18, 18)
+    warn:SetPoint("CENTER", f, "CENTER", 0, -fontSize)
+
+    local wt = warn:CreateFontString(nil, "OVERLAY")
+    wt:SetPoint("CENTER", warn, "CENTER", 0, -1)
+    wt:SetFont(fontPath, fontSize, "OUTLINE")
+    wt:SetTextColor(1.00, 0.15, 0.15, 1.00)
+    wt:SetText(kickText)
+
+    self.frame = f
+    self.text = t
+    self.warnFrame = warn
+end
+
+local function ApplyPosition(self)
+    if not self.frame or not self.db then return end
+    self.frame:ClearAllPoints()
+    self.frame:SetPoint("CENTER", UIParent, "CENTER", self.db.x or 0, self.db.y or -120)
+end
+
+local function ApplyFont(self)
+    if not self.text or not self.db then return end
+    local fontPath = self.db.font or FONT
+    self.text:SetFont(fontPath, tonumber(self.db.fontSize) or 16, "OUTLINE")
 end
 
 -------------------------------------------------
@@ -171,7 +156,6 @@ function FocusCastTracker:ResolveSpell()
         return
     end
 
-    -- C_SpellBook.IsSpellKnown can be nil in some edge environments; guard it.
     if C_SpellBook and C_SpellBook.IsSpellKnown then
         if C_SpellBook.IsSpellKnown(kickId) then
             self.spellID = kickId
@@ -179,7 +163,6 @@ function FocusCastTracker:ResolveSpell()
             self.spellID = nil
         end
     else
-        -- fallback: assume available if we have an id (worst case it'll just be "not ready")
         self.spellID = kickId
     end
 end
@@ -196,7 +179,6 @@ function FocusCastTracker:ReadFocusCast()
     local name, _, _, _, _, _, _, notInterruptible, spellId = UnitCastingInfo("focus")
 
     if not name then
-        -- also consider channels
         name, _, _, _, _, _, _, _, notInterruptible, spellId = UnitChannelInfo("focus")
     end
 
@@ -206,10 +188,10 @@ function FocusCastTracker:ReadFocusCast()
     end
 
     local info = {
-        name             = name,
-        spellId          = spellId,
+        name = name,
+        spellId = spellId,
         notInterruptible = notInterruptible,
-        targetName       = GetFocusTargetName(),
+        targetName = GetFocusTargetName(),
     }
 
     self.castInfo = info
@@ -223,16 +205,9 @@ function FocusCastTracker:ClearCast()
     end
 end
 
--------------------------------------------------
--- Ticker (BS)
--------------------------------------------------
-function FocusCastTracker:StartTicker()
-    BS.Tickers:Stop(self)
-    BS.Tickers:Register(self, tonumber(self.db.updateInterval) or 0.05, function()
-        -- Keep cast info fresh while ticker runs
-        self:ReadFocusCast()
-        self:Update()
-    end)
+function FocusCastTracker:PLAYER_FOCUS_CHANGED()
+    self:ClearCast()
+    self:Update()
 end
 
 -------------------------------------------------
@@ -242,7 +217,6 @@ function FocusCastTracker:Update()
     if not self.db or self.db.enabled == false then return end
     if not self.frame or not self.text then return end
 
-    -- Nothing to show if no focus cast
     if not self.castInfo or not self.castInfo.name then
         self.frame:SetAlpha(0)
         return
@@ -260,9 +234,7 @@ function FocusCastTracker:Update()
         self.warnFrame:SetAlphaFromBoolean(self.castInfo.notInterruptible, 0, 1)
     end
 
-    -- Build message
     local msg = self.castInfo.name
-
     if self.castInfo.targetName then
         msg = msg .. " >> " .. self.castInfo.targetName
     end
@@ -271,132 +243,28 @@ function FocusCastTracker:Update()
 end
 
 -------------------------------------------------
--- Public hooks for Config UI
+-- Ace3 Timer
 -------------------------------------------------
-function FocusCastTracker:ApplyOptions()
-    EnsureUI(self)
-    ApplyPosition(self)
-    ApplyFont(self)
-
-    self.enabled = (self.db and self.db.enabled ~= false)
-
-    self.frame:SetShown(self.enabled)
-
-    if not self.enabled then
-        BS.Tickers:Stop(self)
-        self:ClearCast()
-        return
+function FocusCastTracker:StartTicker()
+    if self.updateTimer then
+        self:CancelTimer(self.updateTimer)
+        self.updateTimer = nil
     end
 
-    self:ResolveSpell()
+    -- ScheduleRepeatingTimer expects (func, delay, ...) NOT (delay, func, ...)
+    local interval = tonumber(self.db.updateInterval) or 0.05
+    self.updateTimer = self:ScheduleRepeatingTimer("TickerUpdate", interval)
+end
+
+function FocusCastTracker:TickerUpdate()
     self:ReadFocusCast()
-
-    if self.castInfo then
-        self:StartTicker()
-    else
-        BS.Tickers:Stop(self)
-    end
-
     self:Update()
 end
 
 -------------------------------------------------
--- Init
+-- Event Handlers (AceEvent style)
 -------------------------------------------------
-function FocusCastTracker:OnInit()
-    self.db = DB:EnsureDB(self.name, defaults)
-    self.enabled = (self.db.enabled ~= false)
-
-    EnsureUI(self)
-    ApplyPosition(self)
-    ApplyFont(self)
-
-    if BS.Movers then
-        BS.Movers:Register(self.frame, self.name, "Focus Cast Tracker")
-    end
-
-    self:ResolveSpell()
-    self:ReadFocusCast()
-
-    self.frame:SetShown(self.enabled)
-
-    if self.enabled and self.castInfo then
-        self:StartTicker()
-    else
-        BS.Tickers:Stop(self)
-    end
-
-    self:Update()
-
-    Events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-    Events:RegisterEvent("PLAYER_FOCUS_CHANGED")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_START", "focus")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "focus")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "focus")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "focus")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_DELAYED", "focus")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "focus")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "focus")
-    Events:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "focus")
-end
-
-function FocusCastTracker:OnDisabled()
-    -- Refresh DB and force disabled
-    self.db = DB:EnsureDB(self.name, defaults)
-    self.enabled = false
-    if self.db then self.db.enabled = false end
-
-    -- Stop ticker / periodic updates
-    if BS and BS.Tickers and BS.Tickers.Stop then
-        BS.Tickers:Stop(self)
-    elseif self.StopTicker then
-        self:StopTicker()
-    end
-
-    -- Unregister events registered in OnInit
-    if Events and Events.UnregisterEvent then
-        Events:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
-        Events:UnregisterEvent("PLAYER_FOCUS_CHANGED")
-    end
-
-    if Events and Events.UnregisterUnitEvent then
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_START", "focus")
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_STOP", "focus")
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_FAILED", "focus")
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "focus")
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_DELAYED", "focus")
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "focus")
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "focus")
-        Events:UnregisterUnitEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "focus")
-    elseif Events and Events.UnregisterAllEventsFor then
-        -- If your Events wrapper is module-scoped, this is usually the cleanest option
-        Events:UnregisterAllEventsFor(self)
-    end
-
-    -- Clear runtime state so re-enable starts clean
-    self.castInfo = nil
-    self.focusGUID = nil
-    self.focusName = nil
-
-    -- Hide UI + ensure it renders "empty" if it gets shown briefly
-    if self.frame then
-        self.frame:Hide()
-    end
-
-    -- Optional mover cleanup (only if your movers system expects removal on disable)
-    if BS and BS.Movers and BS.Movers.Unregister and self.frame then
-        BS.Movers:Unregister(self.frame, self.name)
-    end
-end
-
--------------------------------------------------
--- Events (BS dispatcher)
--------------------------------------------------
-FocusCastTracker.events.SPELL_UPDATE_COOLDOWN = function(self)
-    self:Update()
-end
-
-local function HandleFocusCastEvent(self, unit)
+function FocusCastTracker:OnFocusCastEvent(unit)
     if unit ~= "focus" then return end
     if not self.enabled then return end
 
@@ -404,7 +272,10 @@ local function HandleFocusCastEvent(self, unit)
     if info then
         self:StartTicker()
     else
-        Tickers:Stop(self)
+        if self.updateTimer then
+            self:CancelTimer(self.updateTimer)
+            self.updateTimer = nil
+        end
         self:ClearCast()
     end
 
@@ -417,27 +288,116 @@ local function TalentUpdate(self)
     end)
     C_Timer.After(0.6, function()
         if self.enabled then
-            -- if there's an active cast keep ticker, otherwise stop it
             self:ReadFocusCast()
             if self.castInfo then
                 self:StartTicker()
             else
-                Tickers:Stop(self)
+                if self.updateTimer then
+                    self:CancelTimer(self.updateTimer)
+                    self.updateTimer = nil
+                end
             end
             self:Update()
         end
     end)
 end
 
-FocusCastTracker.events.PLAYER_FOCUS_CHANGED          = HandleFocusCastEvent
-FocusCastTracker.events.PLAYER_SPECIALIZATION_CHANGED = TalentUpdate
-FocusCastTracker.events.TRAIT_CONFIG_UPDATED          = TalentUpdate
-FocusCastTracker.events.ACTIVE_TALENT_GROUP_CHANGED   = TalentUpdate
-FocusCastTracker.events.UNIT_SPELLCAST_START          = HandleFocusCastEvent
-FocusCastTracker.events.UNIT_SPELLCAST_STOP           = HandleFocusCastEvent
-FocusCastTracker.events.UNIT_SPELLCAST_FAILED         = HandleFocusCastEvent
-FocusCastTracker.events.UNIT_SPELLCAST_INTERRUPTED    = HandleFocusCastEvent
-FocusCastTracker.events.UNIT_SPELLCAST_DELAYED        = HandleFocusCastEvent
-FocusCastTracker.events.UNIT_SPELLCAST_CHANNEL_START  = HandleFocusCastEvent
-FocusCastTracker.events.UNIT_SPELLCAST_CHANNEL_STOP   = HandleFocusCastEvent
-FocusCastTracker.events.UNIT_SPELLCAST_CHANNEL_UPDATE = HandleFocusCastEvent
+-------------------------------------------------
+-- Ace3 Lifecycle Callbacks
+-------------------------------------------------
+function FocusCastTracker:OnInitialize()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = (self.db.enabled ~= false)
+end
+
+function FocusCastTracker:OnEnable()
+    self:OnInitialize()
+
+    EnsureUI(self)
+    ApplyPosition(self)
+    ApplyFont(self)
+
+    if BS.Movers then
+        BS.Movers:Register(self.frame, self.name, "Focus Cast Tracker")
+    end
+
+    self:ResolveSpell()
+    self:ReadFocusCast()
+    self.frame:SetShown(self.enabled)
+
+    if self.enabled and self.castInfo then
+        self:StartTicker()
+    end
+
+    self:Update()
+
+    -- Register events using AceEvent
+    self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "Update")
+    self:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    self:RegisterEvent("UNIT_SPELLCAST_START", "OnFocusCastEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_STOP", "OnFocusCastEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_FAILED", "OnFocusCastEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnFocusCastEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_DELAYED", "OnFocusCastEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnFocusCastEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnFocusCastEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "OnFocusCastEvent")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTalentChanged")
+    self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnTalentChanged")
+    self:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED", "OnTalentChanged")
+end
+
+function FocusCastTracker:OnDisable()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = false
+    if self.db then self.db.enabled = false end
+
+    if self.updateTimer then
+        self:CancelTimer(self.updateTimer)
+        self.updateTimer = nil
+    end
+
+    self.castInfo = nil
+    self.focusGUID = nil
+    self.focusName = nil
+
+    if self.frame then
+        self.frame:Hide()
+    end
+
+    -- AceEvent automatically unregisters all events
+end
+
+function FocusCastTracker:OnTalentChanged()
+    TalentUpdate(self)
+end
+
+-------------------------------------------------
+-- ApplyOptions (for Config panel)
+-------------------------------------------------
+function FocusCastTracker:ApplyOptions()
+    EnsureUI(self)
+    ApplyPosition(self)
+    ApplyFont(self)
+
+    self.enabled = (self.db and self.db.enabled ~= false)
+    self.frame:SetShown(self.enabled)
+
+    if not self.enabled then
+        if self.updateTimer then
+            self:CancelTimer(self.updateTimer)
+            self.updateTimer = nil
+        end
+        self:ClearCast()
+        return
+    end
+
+    self:ResolveSpell()
+    self:ReadFocusCast()
+
+    if self.castInfo then
+        self:StartTicker()
+    end
+
+    self:Update()
+end

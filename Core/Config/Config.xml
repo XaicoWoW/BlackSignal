@@ -1,0 +1,7 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<Script file="Minimap.lua"/>
+	<Script file="LeftPanel.lua"/>
+	<Script file="RightPanel.lua"/>
+	<Script file="MainPanel.lua"/>
+	<Script file="Config.lua"/>
+</Ui>

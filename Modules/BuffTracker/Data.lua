@@ -4,7 +4,7 @@
 -- Holds the static buff definitions + a few small helpers used by the engine.
 -- NOTE: This file intentionally keeps "data" concerns separated from UI/logic.
 
-local _, BS = ...
+local BS = _G.BS
 
 local Data = {}
 BS.BuffTrackerData = Data

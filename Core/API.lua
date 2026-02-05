@@ -2,9 +2,9 @@
 -- @module API
 -- @alias API
 
-local _, BS = ...;
+local BS = _G.BS;
 
-BS.API      = {}
+-- Use the table created by Init.lua, don't create a new one
 local API   = BS.API
 API.modules = {}
 

@@ -2,7 +2,7 @@
 -- @module Events
 -- @alias Events
 
-local _, BS  = ...;
+local BS = _G.BS;
 
 BS.Events    = BS.Events or CreateFrame("Frame")
 

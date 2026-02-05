@@ -2,157 +2,115 @@
 -- @module AutoQueue
 -- @alias AutoQueue
 
-local _, BS = ...;
+local BS = _G.BS
 
-local DB    = BS.DB
+-------------------------------------------------
+-- Create as an Ace3 Module
+-------------------------------------------------
+local AutoQueue = BS.Addon:NewModule("AutoQueue", "AceEvent-3.0")
 
-local AutoQueue = {
-  name          = "BS_AQ",
-  label         = "Auto Queue",
-  isQOLModule   = true,
-  enabled       = true,
-  events        = {},
+-------------------------------------------------
+-- Module Metadata (for BS.API compatibility)
+-------------------------------------------------
+AutoQueue.name = "BS_AQ"
+AutoQueue.label = "Auto Queue"
+AutoQueue.isQOLModule = true
+AutoQueue.enabled = true
+AutoQueue.defaults = {
+    enabled = true,
+    printOnAccept = true,
 }
 
+-------------------------------------------------
+-- Register with BS.API (for Config panel compatibility)
+-------------------------------------------------
 BS.API:Register(AutoQueue)
-
--------------------------------------------------
--- Defaults
--------------------------------------------------
-local defaults = {
-  enabled = true,
-  printOnAccept = true,
-}
-
-AutoQueue.defaults = defaults
 
 -------------------------------------------------
 -- Utils
 -------------------------------------------------
---- Print message to chat frame
---- @local
---- @param msg string The message to print
---- @return nil
--------------------------------------------------
 local function Print(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cffb048f8BS AutoQueue:|r " .. tostring(msg))
+    DEFAULT_CHAT_FRAME:AddMessage("|cffb048f8BS AutoQueue:|r " .. tostring(msg))
 end
 
 -------------------------------------------------
 -- Core: Role check accept
 -------------------------------------------------
---- Try to complete the role check
---- @return nil
--------------------------------------------------
 function AutoQueue:TryCompleteRoleCheck()
-  print("Attempting to accept role check...")
-  if not self.enabled then return end
-  if not CompleteLFGRoleCheck then return end
+    print("Attempting to accept role check...")
+    if not self.enabled then return end
+    if not CompleteLFGRoleCheck then return end
 
-  local ok, err = pcall(CompleteLFGRoleCheck, true)
-  if ok then
-    if self.db.printOnAccept then
-      Print("Role check accepted.")
+    local ok, err = pcall(CompleteLFGRoleCheck, true)
+    if ok then
+        if self.db.printOnAccept then
+            Print("Role check accepted.")
+        end
+    else
+        Print("Role check accept failed: " .. tostring(err))
     end
-  else
-    Print("Role check accept failed: " .. tostring(err))
-  end
 end
 
 -------------------------------------------------
---- Event Handler
---- @param event string The event name
---- @param ... any Additional event arguments
---- @return nil
--------------------------------------------------
-function AutoQueue:OnEvent(event, ...)
-  if event == "LFG_ROLE_CHECK_SHOW" then
-    self:TryCompleteRoleCheck()
-  end
-end
-
--------------------------------------------------
--- Slash
--------------------------------------------------
---- Handle slash commands
---- @param arg string The slash command argument
---- @return nil
+-- Slash Commands
 -------------------------------------------------
 function AutoQueue:HandleSlash(arg)
-  arg = (arg or ""):lower()
+    arg = (arg or ""):lower()
 
-  if arg == "" or arg == "toggle" then
-    self.db.enabled = not self.db.enabled
-    Print("Auto Role Check: " .. (self.db.enabled and "ON" or "OFF"))
-    return
-  end
+    if arg == "" or arg == "toggle" then
+        self.db.enabled = not self.db.enabled
+        Print("Auto Role Check: " .. (self.db.enabled and "ON" or "OFF"))
+        return
+    end
 
-  if arg == "on" then
-    self.db.enabled = true
-    Print("Auto Role Check: ON")
-    return
-  end
+    if arg == "on" then
+        self.db.enabled = true
+        Print("Auto Role Check: ON")
+        return
+    end
 
-  if arg == "off" then
-    self.db.enabled = false
-    Print("Auto Role Check: OFF")
-    return
-  end
+    if arg == "off" then
+        self.db.enabled = false
+        Print("Auto Role Check: OFF")
+        return
+    end
 
-  Print("Usage: /bs aq [toggle|on|off]")
+    Print("Usage: /bs aq [toggle|on|off]")
 end
 
 -------------------------------------------------
--- Init / Apply
+-- Ace3 Lifecycle Callbacks
 -------------------------------------------------
-function AutoQueue:OnInit()
-  self.db = DB:EnsureDB(self.name, self.defaults)
-
-  self.enabled = (self.db.enabled ~= false)
-
-  if not self.eventFrame then
-    local f = CreateFrame("Frame")
-    self.eventFrame = f
-    f:SetScript("OnEvent", function(_, event, ...)
-      self:OnEvent(event, ...)
-    end)
-  end
-
-  self.eventFrame:UnregisterAllEvents()
-
-  if self.enabled then
-    self.eventFrame:RegisterEvent("LFG_ROLE_CHECK_SHOW")
-  end
+function AutoQueue:OnInitialize()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = (self.db.enabled ~= false)
 end
 
-function AutoQueue:OnDisabled()
-  -- Refresh DB + force disabled
-  self.db = DB:EnsureDB(self.name, self.defaults)
-  self.enabled = false
-  if self.db then self.db.enabled = false end
+function AutoQueue:OnEnable()
+    self:OnInitialize()
 
-  -- Unregister events and stop reacting
-  if self.eventFrame then
-    self.eventFrame:UnregisterAllEvents()
-  end
+    -- Register event using AceEvent
+    if self.enabled then
+        self:RegisterEvent("LFG_ROLE_CHECK_SHOW", "TryCompleteRoleCheck")
+    end
+end
 
-  -- If you have any tickers/timers in this module, stop them (safe no-op)
-  if BS and BS.Tickers and BS.Tickers.Stop then
-    BS.Tickers:Stop(self)
-  end
+function AutoQueue:OnDisable()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = false
+    if self.db then self.db.enabled = false end
+
+    -- AceEvent automatically unregisters all events on disable
 end
 
 -------------------------------------------------
---- Apply configuration changes
---- @return nil
+-- ApplyOptions (for Config panel)
 -------------------------------------------------
 function AutoQueue:Apply()
-  if not self.db then self.db = DB:EnsureDB(self.name, self.defaults) end
+    if not self.db then self.db = BS.DB:EnsureDB(self.name, self.defaults) end
 
-  if self.eventFrame then
-    self.eventFrame:UnregisterAllEvents()
+    -- Re-register event if enabled
     if self.db.enabled then
-      self.eventFrame:RegisterEvent("LFG_ROLE_CHECK_SHOW")
+        self:RegisterEvent("LFG_ROLE_CHECK_SHOW", "TryCompleteRoleCheck")
     end
-  end
 end

@@ -2,10 +2,9 @@
 -- Self-contained minimap button (no LibDBIcon)
 -- Supports drag around minimap, show/hide, and click callbacks.
 
-local _, BS = ...;
+local BS = _G.BS;
 
-BS.MinimapButton = {}
-
+-- Use the table created by Init.lua, don't create a new one
 local MB = BS.MinimapButton
 
 local defaults = {

@@ -2,9 +2,10 @@
 -- @module Utils
 -- @alias Utils
 
-local _, BS = ...;
+-- Use the global BS table created by Init.lua
+local BS = _G.BS
 
-BS.Utils    = {}
+-- Use the table created by Init.lua, don't create a new one
 local Utils = BS.Utils
 
 --- Check if a value is a valid number

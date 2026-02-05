@@ -4,64 +4,50 @@
 -- 1. Cursor Ring (anillo decorativo base, el más pequeño - dentro)
 -- 2. GCD Spinner (arco creciente, tamaño medio)
 --
--- Efecto: Arco creciente (swipe) desde vacío hasta lleno, horario, sin brillo
--- Orden: De dentro hacia fuera (Cursor Ring → GCD)
---
 -- @module MouseRing
 -- @alias MouseRing
 
-local _, BS = ...
-local DB     = BS.DB
-local API    = BS.API
-local Events = BS.Events
+local BS = _G.BS
 
-local MouseRing = {
-    name    = "BS_CR",
-    label   = "Cursor Ring",
+-------------------------------------------------
+-- Create as an Ace3 Module
+-------------------------------------------------
+local MouseRing = BS.Addon:NewModule("MouseRing", "AceEvent-3.0")
+
+-------------------------------------------------
+-- Module Metadata (for BS.API compatibility)
+-------------------------------------------------
+MouseRing.name = "BS_CR"
+MouseRing.label = "Cursor Ring"
+MouseRing.enabled = true
+MouseRing.defaults = {
     enabled = true,
-    events  = {},
+    size = 48,
+    thickness = 20,
+    ringColorR = 0,
+    ringColorG = 1,
+    ringColorB = 0,
+    ringAlpha = 0.9,
+    colorPicker = true,
+    x = 0,
+    y = 0,
+    gcdEnabled = true,
+    gcdShowOnly = false,
+    gcdReverse = true,
 }
 
-API:Register(MouseRing)
+-------------------------------------------------
+-- Register with BS.API (for Config panel compatibility)
+-------------------------------------------------
+BS.API:Register(MouseRing)
 
 -------------------------------------------------
 -- Constants / Locals
 -------------------------------------------------
 local GCD_SPELL_ID = 61304
-
 local GetTime = GetTime
 local GetSpellCooldown = (C_Spell and C_Spell.GetSpellCooldown) or GetSpellCooldown
 
--------------------------------------------------
--- Defaults
--------------------------------------------------
-local defaults = {
-    enabled = true,
-
-    size        = 48,
-    thickness   = 20,
-
-    -- Color único para todos los anillos
-    ringColorR  = 0,
-    ringColorG  = 1,
-    ringColorB  = 0,
-    ringAlpha   = 0.9,
-    colorPicker = true,
-
-    x = 0,
-    y = 0,
-
-    -- GCD settings
-    gcdEnabled      = true,
-    gcdShowOnly     = false,
-    gcdReverse      = true,  -- Invertido: true = normal, false = reverso
-}
-
-MouseRing.defaults = defaults
-
--------------------------------------------------
--- Helpers
--------------------------------------------------
 local function HideCooldownText(cooldown)
     if not cooldown then return end
     for _, region in ipairs({ cooldown:GetRegions() }) do
@@ -76,13 +62,9 @@ end
 
 local function SetupCooldownTextHiding(cooldown)
     if not cooldown then return end
-
-    -- Hook SetCooldown para ocultar el texto cada vez que se actualiza
     hooksecurefunc(cooldown, "SetCooldown", function()
         HideCooldownText(cooldown)
     end)
-
-    -- Ocultar texto inicial
     HideCooldownText(cooldown)
 end
 
@@ -120,8 +102,8 @@ local function GetGCDCooldownInfo()
     if not cd then return false, 0, 0 end
 
     local start = cd.startTime or cd[1] or 0
-    local dur   = cd.duration  or cd[2] or 0
-    local en    = cd.isEnabled
+    local dur = cd.duration or cd[2] or 0
+    local en = cd.isEnabled
 
     if en ~= nil and not en then return false, 0, 0 end
     if dur <= 0 or dur > 2.5 then return false, 0, 0 end
@@ -134,7 +116,6 @@ end
 -------------------------------------------------
 -- Core Layout
 -------------------------------------------------
-
 function MouseRing:CalculateSizes()
     local db = self.db
     local baseSize = Clamp(ToNumber(db.size, 48), 12, 256)
@@ -153,12 +134,10 @@ function MouseRing:Layout()
 
     self.holder:SetSize(holderSize, holderSize)
 
-    -- Cursor Ring (DENTRO)
     self.ringFrame:SetSize(baseSize, baseSize)
     self.ringFrame:ClearAllPoints()
     self.ringFrame:SetPoint("CENTER", self.holder, "CENTER", 0, 0)
 
-    -- GCD Cooldown Frame (MEDIO) - Verificar que existe
     if self.gcdCooldown then
         self.gcdCooldown:SetSize(gcdSize, gcdSize)
         self.gcdCooldown:ClearAllPoints()
@@ -189,7 +168,6 @@ function MouseRing:ApplyGCDStyle()
 
     self.gcdCooldown:SetSwipeTexture(GetRingTexturePath(db))
     self.gcdCooldown:SetSwipeColor(r, g, b, a)
-    -- Invertir lógica: true = normal, false = reverso
     self.gcdCooldown:SetReverse(not (db.gcdReverse == true))
     self.gcdReverse = db.gcdReverse == true
 end
@@ -197,7 +175,6 @@ end
 -------------------------------------------------
 -- Update Logic
 -------------------------------------------------
-
 function MouseRing:UpdateGCD()
     if not self.db or not self.gcdCooldown then return end
     local db = self.db
@@ -228,7 +205,6 @@ function MouseRing:UpdateGCD()
 
     self._gcdActive = true
 
-    -- Solo resetear si es un GCD nuevo (anti-tirones)
     if self._gcdStart ~= start or self._gcdDur ~= dur then
         self._gcdStart = start
         self._gcdDur = dur
@@ -271,37 +247,26 @@ function MouseRing:Update(refreshLayout)
 end
 
 -------------------------------------------------
--- Events
+-- Event Handlers (AceEvent style)
 -------------------------------------------------
-MouseRing.events.PLAYER_ENTERING_WORLD = function(self)
+function MouseRing:OnPlayerEnteringWorld()
     self:Update(true)
 end
 
-MouseRing.events.SPELL_UPDATE_COOLDOWN = function(self)
+function MouseRing:OnSpellUpdateCooldown()
     self:UpdateGCD()
 end
 
 -------------------------------------------------
--- Options Application
+-- Ace3 Lifecycle Callbacks
 -------------------------------------------------
-function MouseRing:ApplyOptions()
-    if not self.holder or not self.db then return end
-
-    self.db = DB:EnsureDB(self.name, defaults)
-
-    self:ApplyRing()
-    self:ApplyGCDStyle()
-    self:Layout()
-
-    self:Update(true)
+function MouseRing:OnInitialize()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = (self.db.enabled ~= false)
 end
 
--------------------------------------------------
--- Lifecycle
--------------------------------------------------
-function MouseRing:OnInit()
-    self.db = DB:EnsureDB(self.name, defaults)
-    self.enabled = (self.db.enabled ~= false)
+function MouseRing:OnEnable()
+    self:OnInitialize()
 
     if self.__initialized and self.holder then
         self:Update(true)
@@ -315,7 +280,6 @@ function MouseRing:OnInit()
     holder:Hide()
     self.holder = holder
 
-    -- Cursor Ring (DENTRO)
     local ringFrame = CreateFrame("Frame", "$parent_Ring", holder)
     ringFrame:SetFrameStrata("TOOLTIP")
     ringFrame:SetFrameLevel(holder:GetFrameLevel() + 1)
@@ -326,7 +290,6 @@ function MouseRing:OnInit()
     ringTex:SetBlendMode("BLEND")
     self.ringTex = ringTex
 
-    -- GCD Cooldown Frame (MEDIO) - Efecto swipe de arco creciente
     local gcdCooldown = CreateFrame("Cooldown", "$parent_GCD", holder, "CooldownFrameTemplate")
     gcdCooldown:SetFrameStrata("TOOLTIP")
     gcdCooldown:SetFrameLevel(holder:GetFrameLevel() + 2)
@@ -341,9 +304,6 @@ function MouseRing:OnInit()
     self._gcdActive = false
     self._gcdStart, self._gcdDur = nil, nil
     self.gcdReverse = false
-
-    Events:RegisterEvent("PLAYER_ENTERING_WORLD")
-    Events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 
     local lastX, lastY
 
@@ -364,22 +324,38 @@ function MouseRing:OnInit()
         end
     end)
 
+    -- Register events using AceEvent
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
+    self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "OnSpellUpdateCooldown")
+
     self:Update(true)
 end
 
-function MouseRing:OnDisabled()
-    self.db = DB:EnsureDB(self.name, defaults)
+function MouseRing:OnDisable()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
     self.enabled = false
     if self.db then self.db.enabled = false end
-    
-    if BS.Tickers and BS.Tickers.Stop then
-        BS.Tickers:Stop(self)
-    end
 
-    -- Hide UI immediately
-    if self.frame then
-        self.frame:Hide()
+    if self.holder then
+        self.holder:Hide()
     end
     self._gcdActive = false
     self._gcdStart, self._gcdDur = nil, nil
+
+    -- AceEvent automatically unregisters all events
+end
+
+-------------------------------------------------
+-- ApplyOptions (for Config panel)
+-------------------------------------------------
+function MouseRing:ApplyOptions()
+    if not self.holder or not self.db then return end
+
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+
+    self:ApplyRing()
+    self:ApplyGCDStyle()
+    self:Layout()
+
+    self:Update(true)
 end

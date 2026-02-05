@@ -1,7 +1,7 @@
 -- Modules/BuffTracker/Engine.lua
 -- @module BuffTrackerEngine
 
-local _, BS = ...
+local BS = _G.BS
 
 local Engine         = {}
 BS.BuffTrackerEngine = Engine

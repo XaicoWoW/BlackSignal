@@ -2,7 +2,7 @@
 -- @module RightPanel
 -- @alias RightPanel
 
-local _, BS      = ...
+local BS = _G.BS
 
 BS.RightPanel    = {}
 local RightPanel = BS.RightPanel

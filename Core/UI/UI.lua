@@ -1,8 +1,8 @@
 -- Core/UI.lua
 -- UI helpers + reusable styles
-local _, BS = ...;
-BS.UI = {}
+local BS = _G.BS;
 
+-- Use the table created by Init.lua, don't create a new one
 local UI = BS.UI
 local EB = BS.EditBox
 

@@ -1,4 +1,4 @@
--- Modules/CombatTime.lua
+-- Modules/CombatTime/CombatTime.lua
 -- @module CombatTime
 -- @alias CombatTime
 --
@@ -8,48 +8,57 @@
 -- When entering combat: starts from 00:00.
 -- Persists an all-time total (optional) into SavedVariables.
 
-local _, BS      = ...;
+local BS = _G.BS
 
-local API        = BS.API
-local Events     = BS.Events
+local _, BS = ...
 
-local CombatTime = {
-    name    = "BS_CT",
-    label   = "Combat Timer",
+-------------------------------------------------
+-- Create as an Ace3 Module
+-------------------------------------------------
+-- BS.Addon is the main AceAddon created in Core/Init.lua
+-- NewModule creates a child module that inherits all embedded libraries
+local CombatTime = BS.Addon:NewModule("CombatTime", "AceEvent-3.0", "AceTimer-3.0")
+
+-------------------------------------------------
+-- Module Metadata (for BS.API compatibility)
+-------------------------------------------------
+CombatTime.name = "BS_CT"
+CombatTime.label = "Combat Timer"
+CombatTime.enabled = true
+CombatTime.defaults = {
     enabled = true,
-    events  = {},
+    x = 0,
+    y = -120,
+    fontSize = 20,
+    font = "Fonts\\FRIZQT__.TTF",
+    updateInterval = 1,
+    persistTotal = true,
+    totalSeconds = 0,
 }
 
-API:Register(CombatTime)
-
 -------------------------------------------------
--- Defaults
+-- Register with BS.API (for Config panel compatibility)
 -------------------------------------------------
-local defaults = {
-    enabled        = true,
-
-    -- UI
-    x              = 0,
-    y              = -120,
-    fontSize       = 20,
-    font           = "Fonts\\FRIZQT__.TTF",
-
-    -- Behavior
-    updateInterval = 1,  -- ticker rate
-
-    -- Persistence
-    persistTotal   = true, -- store total combat time across sessions
-    totalSeconds   = 0,    -- saved field (only meaningful if persistTotal = true)
-}
-
-CombatTime.defaults = defaults
+BS.API:Register(CombatTime)
 
 -------------------------------------------------
 -- State
 -------------------------------------------------
-CombatTime.inCombat     = false
-CombatTime.combatStart  = nil
+CombatTime.inCombat = false
+CombatTime.combatStart = nil
 CombatTime.totalSeconds = 0
+
+-------------------------------------------------
+-- Formatting
+-------------------------------------------------
+local function FormatMMSS(seconds)
+    seconds = tonumber(seconds) or 0
+    if seconds < 0 then seconds = 0 end
+    seconds = math.floor(seconds + 0.5)
+    local m = math.floor(seconds / 60)
+    local s = seconds % 60
+    return string.format("%02d:%02d", m, s)
+end
 
 -------------------------------------------------
 -- UI
@@ -64,7 +73,6 @@ end
 local function CalculateWidth(self)
     if not self.textFS or not self.db then return 100 end
     local fontSize = tonumber(self.db.fontSize) or 20
-    -- Approx width for "mm:ss" plus some padding
     return (fontSize * 4) + 20
 end
 
@@ -82,7 +90,7 @@ local function EnsureUI(self)
     statusText:SetJustifyH("CENTER")
     statusText:SetTextColor(1, 1, 1, 1)
 
-    self.frame  = displayFrame
+    self.frame = displayFrame
     self.textFS = statusText
 end
 
@@ -98,32 +106,20 @@ local function ApplyFont(self)
 end
 
 -------------------------------------------------
--- Formatting
--------------------------------------------------
-local function FormatMMSS(seconds)
-    seconds = tonumber(seconds) or 0
-    if seconds < 0 then seconds = 0 end
-    seconds = math.floor(seconds + 0.5)
-    local m = math.floor(seconds / 60)
-    local s = seconds % 60
-    return string.format("%02d:%02d", m, s)
-end
-
--------------------------------------------------
 -- Update
--------------------------------------------------
---- Update the combat time display (only while in combat)
---- @return nil
 -------------------------------------------------
 function CombatTime:Update()
     if not self.db or self.db.enabled == false then return end
     if not self.frame or not self.textFS then return end
 
     if not self.inCombat or not self.combatStart then
-        -- Out of combat: hide and show 00:00 next time
         self.textFS:SetText("00:00")
         self.frame:Hide()
-        BS.Tickers:Stop(self)
+        -- Cancel the repeating timer using AceTimer
+        if self.combatTimer then
+            self:CancelTimer(self.combatTimer)
+            self.combatTimer = nil
+        end
         return
     end
 
@@ -136,23 +132,22 @@ function CombatTime:Update()
 end
 
 -------------------------------------------------
--- Ticker
--------------------------------------------------
---- Start the update ticker
---- @return nil
+-- Ace3 Timer
 -------------------------------------------------
 function CombatTime:StartTicker()
-    BS.Tickers:Stop(self)
-    BS.Tickers:Register(self, tonumber(self.db.updateInterval) or defaults.updateInterval, function()
-        self:Update()
-    end)
+    -- Cancel existing timer if any
+    if self.combatTimer then
+        self:CancelTimer(self.combatTimer)
+        self.combatTimer = nil
+    end
+
+    -- ScheduleRepeatingTimer expects (func, delay, ...) NOT (delay, func, ...)
+    local interval = tonumber(self.db.updateInterval) or self.defaults.updateInterval
+    self.combatTimer = self:ScheduleRepeatingTimer("Update", interval)
 end
 
 -------------------------------------------------
 -- Combat transitions
--------------------------------------------------
---- Handle entering combat (reset and start from 0)
---- @return nil
 -------------------------------------------------
 function CombatTime:EnterCombat()
     if self.inCombat then return end
@@ -166,9 +161,6 @@ function CombatTime:EnterCombat()
     self:Update()
 end
 
---- Handle leaving combat (persist, reset, hide)
---- @return nil
--------------------------------------------------
 function CombatTime:LeaveCombat()
     if not self.inCombat then return end
 
@@ -194,28 +186,44 @@ function CombatTime:LeaveCombat()
         self.textFS:SetText("00:00")
     end
 
-    BS.Tickers:Stop(self)
+    -- Cancel timer using AceTimer
+    if self.combatTimer then
+        self:CancelTimer(self.combatTimer)
+        self.combatTimer = nil
+    end
+
     if self.frame then self.frame:Hide() end
 end
 
 -------------------------------------------------
--- Init
+-- Ace3 Lifecycle Callbacks
 -------------------------------------------------
-function CombatTime:OnInit()
-    self.db = BS.DB:EnsureDB(self.name, defaults)
+
+function CombatTime:OnInitialize()
+    -- This is called when the addon is loaded
+    -- Initialize the database using AceDB
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
     self.enabled = (self.db.enabled ~= false)
 
     -- Load persistent total
     self.db.totalSeconds = tonumber(self.db.totalSeconds) or 0
     self.totalSeconds = self.db.totalSeconds
+end
+
+function CombatTime:OnEnable()
+    -- This is called on PLAYER_LOGIN when module is enabled
+    self:OnInitialize()
 
     EnsureUI(self)
     ApplyPosition(self)
     ApplyFont(self)
-    BS.Movers:Register(self.frame, self.name, "Combat Time")
+
+    -- Register with movers
+    if BS.Movers then
+        BS.Movers:Register(self.frame, self.name, "Combat Time")
+    end
 
     if not self.enabled then
-        BS.Tickers:Stop(self)
         self.frame:Hide()
         return
     end
@@ -232,18 +240,17 @@ function CombatTime:OnInit()
         self.combatStart = nil
         self.textFS:SetText("00:00")
         self.frame:Hide()
-        BS.Tickers:Stop(self)
     end
 
-    -- We rely on regen events for accurate transitions
-    Events:RegisterEvent("PLAYER_REGEN_DISABLED")
-    Events:RegisterEvent("PLAYER_REGEN_ENABLED")
-    Events:RegisterEvent("PLAYER_ENTERING_WORLD")
+    -- Register events using AceEvent (embedded library)
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "EnterCombat")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "LeaveCombat")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
 end
 
-function CombatTime:OnDisabled()
+function CombatTime:OnDisable()
     -- Refresh db, force disable, persist state
-    self.db = BS.DB:EnsureDB(self.name, defaults)
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
     self.enabled = false
     if self.db then self.db.enabled = false end
 
@@ -251,21 +258,14 @@ function CombatTime:OnDisabled()
     self.inCombat = false
     self.combatStart = nil
 
-    -- Stop ticker / updates
-    if BS.Tickers and BS.Tickers.Stop then
-        BS.Tickers:Stop(self)
-    elseif self.StopTicker then
-        self:StopTicker()
+    -- Cancel timer using AceTimer
+    if self.combatTimer then
+        self:CancelTimer(self.combatTimer)
+        self.combatTimer = nil
     end
 
-    -- Unregister events registered in OnInit
-    if Events and Events.UnregisterEvent then
-        Events:UnregisterEvent("PLAYER_REGEN_DISABLED")
-        Events:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        Events:UnregisterEvent("PLAYER_ENTERING_WORLD")
-    elseif Events and Events.UnregisterAllEventsFor then
-        Events:UnregisterAllEventsFor(self)
-    end
+    -- Unregister all events (AceEvent handles this automatically)
+    -- No need to manually unregister
 
     -- Hide UI
     if self.textFS then
@@ -274,28 +274,12 @@ function CombatTime:OnDisabled()
     if self.frame then
         self.frame:Hide()
     end
-
-    -- Optional mover cleanup (keep if your movers system expects it)
-    if BS.Movers and BS.Movers.Unregister and self.frame then
-        BS.Movers:Unregister(self.frame, self.name)
-    end
 end
-
 
 -------------------------------------------------
--- Events
+-- Event Handlers (AceEvent style)
 -------------------------------------------------
-CombatTime.events.PLAYER_REGEN_DISABLED = function(self)
-    if not self.db or self.db.enabled == false then return end
-    self:EnterCombat()
-end
-
-CombatTime.events.PLAYER_REGEN_ENABLED = function(self)
-    if not self.db or self.db.enabled == false then return end
-    self:LeaveCombat()
-end
-
-CombatTime.events.PLAYER_ENTERING_WORLD = function(self)
+function CombatTime:OnPlayerEnteringWorld()
     if not self.db or self.db.enabled == false then return end
 
     -- Safety sync on zoning/reload
@@ -309,6 +293,24 @@ CombatTime.events.PLAYER_ENTERING_WORLD = function(self)
             self:LeaveCombat()
             return
         end
+    end
+
+    self:Update()
+end
+
+-------------------------------------------------
+-- ApplyOptions (for Config panel)
+-------------------------------------------------
+function CombatTime:ApplyOptions()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    -- Update behavior and UI with new config
+
+    ApplyPosition(self)
+    ApplyFont(self)
+
+    -- Restart ticker with new interval if enabled
+    if self.enabled and self.inCombat then
+        self:StartTicker()
     end
 
     self:Update()

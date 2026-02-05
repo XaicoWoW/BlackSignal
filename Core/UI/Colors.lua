@@ -1,6 +1,6 @@
-local _, BS = ...;
-BS.Colors = {};
+local BS = _G.BS;
 
+-- Use the table created by Init.lua, don't create a new one
 local C = BS.Colors
 
 -- Brand

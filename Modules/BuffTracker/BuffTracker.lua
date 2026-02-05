@@ -2,74 +2,63 @@
 -- @module BuffTracker
 -- @alias BuffTracker
 
-local _, BS  = ...
-local API    = BS.API
-local Events = BS.Events
+local BS = _G.BS
 
-local BuffTracker = {
-    name    = "BS_BT",
-    label   = "Buff Tracker",
+-------------------------------------------------
+-- Create as an Ace3 Module
+-------------------------------------------------
+local BuffTracker = BS.Addon:NewModule("BuffTracker", "AceEvent-3.0")
+
+-------------------------------------------------
+-- Module Metadata (for BS.API compatibility)
+-------------------------------------------------
+BuffTracker.name = "BS_BT"
+BuffTracker.label = "Buff Tracker"
+BuffTracker.enabled = true
+BuffTracker.defaults = {
     enabled = true,
-    classes = nil,
-    events  = {},
+    locked = true,
+    scale = 1,
+    iconSize = 64,
+    spacing = 8,
+    perRow = 12,
+    showText = true,
+    x = 0,
+    y = 500,
+    showOptions = true,
+    showOnlyInGroup = false,
+    showOnlyInInstance = false,
+    showOnlyPlayerClassBuff = false,
+    showOnlyPlayerMissing = false,
+    showOnlyOnReadyCheck = false,
+    showExpirationGlow = true,
+    expirationThreshold = 15,
+    categories = {
+        raid = true,
+        presence = true,
+        personal = true,
+        self = true,
+    },
 }
 
-API:Register(BuffTracker)
+-------------------------------------------------
+-- Register with BS.API (for Config panel compatibility)
+-------------------------------------------------
+BS.API:Register(BuffTracker)
 
 -------------------------------------------------
 -- Constants
 -------------------------------------------------
-local READY_CHECK_DURATION = 15          -- seconds (fixed)
-local UPDATE_THROTTLE_SEC  = 0.20        -- UI refresh cap
-
--------------------------------------------------
--- Defaults
--------------------------------------------------
-local defaults = {
-    enabled                 = true,
-
-    locked                  = true,
-    scale                   = 1,
-    iconSize                = 64,
-    spacing                 = 8,
-    perRow                  = 12,
-    showText                = true,
-    x                       = 0,
-    y                       = 500,
-    showOptions             = true,
-
-    showOnlyInGroup         = false,
-    showOnlyInInstance      = false,
-    showOnlyPlayerClassBuff = false,
-    showOnlyPlayerMissing   = false,
-    showOnlyOnReadyCheck    = false,
-
-    showExpirationGlow      = true,
-    expirationThreshold     = 15, -- minutes
-
-    categories              = {
-        raid     = true,
-        presence = true,
-        personal = true,
-        self     = true,
-        -- custom buffs (self-only) -> se gestionan en Data/Engine/UI
-    },
-}
+local READY_CHECK_DURATION = 15
+local UPDATE_THROTTLE_SEC = 0.20
 
 -------------------------------------------------
 -- Internal helpers
 -------------------------------------------------
 local function EnsureDeps(self)
-    self.Data   = BS.BuffTrackerData
+    self.Data = BS.BuffTrackerData
     self.Engine = BS.BuffTrackerEngine
-    self.UI     = BS.BuffTrackerUI
-end
-
-local function CancelReadyCheckTimer(self)
-    if self._readyCheckTimer then
-        self._readyCheckTimer:Cancel()
-        self._readyCheckTimer = nil
-    end
+    self.UI = BS.BuffTrackerUI
 end
 
 local function IsMythicPlusActive()
@@ -81,7 +70,6 @@ local function UpdateChallengeState(self)
 end
 
 local function ScheduleTalentRefresh(self)
-    -- Talent swaps spam multiple events; coalesce them.
     if self._talentTimer then
         self._talentTimer:Cancel()
         self._talentTimer = nil
@@ -92,9 +80,6 @@ local function ScheduleTalentRefresh(self)
     end)
 end
 
--- IMPORTANT:
--- En tu UI.lua existe UI:HideAll() (y NO UI:Hide()).
--- Si aquí llamábamos a UI:Hide(), no se ocultaba nada en combate.
 local function HideUI(self)
     if self and self.UI and self.UI.HideAll then
         self.UI:HideAll()
@@ -117,7 +102,10 @@ function BuffTracker:RequestUpdate(force)
     UpdateChallengeState(self)
 
     if self._inCombat or self._inChallengeMode then
-        CancelReadyCheckTimer(self)
+        if self._readyCheckTimer then
+            self._readyCheckTimer:Cancel()
+            self._readyCheckTimer = nil
+        end
         HideUI(self)
         return
     end
@@ -135,155 +123,65 @@ function BuffTracker:Update()
 end
 
 -------------------------------------------------
--- Init
+-- Event Handlers (AceEvent style)
 -------------------------------------------------
-function BuffTracker:OnInit()
-    self.db      = BS.DB:EnsureDB(self.name, defaults)
-    self.enabled = (self.db.enabled ~= false)
-
-    EnsureDeps(self)
-    if not self.Engine or not self.UI then
-        -- Si por lo que sea aún no están cargados, no crashees
-        return
-    end
-    self.UI:Ensure(self)
-
-    local root = self.UI:GetRootFrame()
-    if root then
-        BS.Movers:Register(root, self.name, "Buff Tracker")
-    end
-
-    -- State
-    self._inCombat        = InCombatLockdown()
-    self._inChallengeMode = IsMythicPlusActive() and true or false
-    self._inReadyCheck    = false
-    self._readyCheckTimer = nil
-    self._talentTimer     = nil
-
-    -- Events
-    Events:RegisterEvent("PLAYER_ENTERING_WORLD")
-    Events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    Events:RegisterEvent("CHALLENGE_MODE_START")
-    Events:RegisterEvent("CHALLENGE_MODE_RESET")
-    Events:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-    Events:RegisterEvent("GROUP_ROSTER_UPDATE")
-    Events:RegisterEvent("UNIT_AURA")
-    Events:RegisterEvent("PLAYER_REGEN_ENABLED")
-    Events:RegisterEvent("PLAYER_REGEN_DISABLED")
-    Events:RegisterEvent("READY_CHECK")
-    Events:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    Events:RegisterEvent("TRAIT_CONFIG_UPDATED")
-    Events:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-
-    self:Update()
-end
-
-function BuffTracker:OnDisabled()
-    -- Refresh DB and force disabled
-    self.db = BS.DB:EnsureDB(self.name, defaults)
-    self.enabled = false
-    if self.db then self.db.enabled = false end
-
-    -- Cancel timers
-    if self._readyCheckTimer then
-        self._readyCheckTimer:Cancel()
-        self._readyCheckTimer = nil
-    end
-    if self._talentTimer then
-        self._talentTimer:Cancel()
-        self._talentTimer = nil
-    end
-
-    -- Reset runtime state
-    self._inCombat        = false
-    self._inChallengeMode = false
-    self._inReadyCheck    = false
-
-    -- Unregister all events registered in OnInit
-    if Events and Events.UnregisterEvent then
-        Events:UnregisterEvent("PLAYER_ENTERING_WORLD")
-        Events:UnregisterEvent("ZONE_CHANGED_NEW_AREA")
-        Events:UnregisterEvent("CHALLENGE_MODE_START")
-        Events:UnregisterEvent("CHALLENGE_MODE_RESET")
-        Events:UnregisterEvent("CHALLENGE_MODE_COMPLETED")
-        Events:UnregisterEvent("GROUP_ROSTER_UPDATE")
-        Events:UnregisterEvent("UNIT_AURA")
-        Events:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        Events:UnregisterEvent("PLAYER_REGEN_DISABLED")
-        Events:UnregisterEvent("READY_CHECK")
-        Events:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-        Events:UnregisterEvent("TRAIT_CONFIG_UPDATED")
-        Events:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-    elseif Events and Events.UnregisterAllEventsFor then
-        -- Preferred if your Events wrapper is module-scoped
-        Events:UnregisterAllEventsFor(self)
-    end
-
-    -- Hide UI
-    if self.UI and self.UI.GetRootFrame then
-        local root = self.UI:GetRootFrame()
-        if root then
-            root:Hide()
-
-            -- Optional mover cleanup (only if expected on disable)
-            if BS and BS.Movers and BS.Movers.Unregister then
-                BS.Movers:Unregister(root, self.name)
-            end
-        end
-    end
-end
-
--------------------------------------------------
--- Events
--------------------------------------------------
-BuffTracker.events.PLAYER_ENTERING_WORLD = function(self)
+function BuffTracker:OnPlayerEnteringWorld()
     self._inCombat = InCombatLockdown()
     self:RequestUpdate(true)
 end
 
-BuffTracker.events.ZONE_CHANGED_NEW_AREA = function(self)
+function BuffTracker:OnZoneChangedNewArea()
     UpdateChallengeState(self)
     self:RequestUpdate(true)
 end
 
-BuffTracker.events.CHALLENGE_MODE_START = function(self)
+function BuffTracker:OnChallengeModeStart()
     UpdateChallengeState(self)
-    CancelReadyCheckTimer(self)
+    if self._readyCheckTimer then
+        self._readyCheckTimer:Cancel()
+        self._readyCheckTimer = nil
+    end
     HideUI(self)
 end
 
-BuffTracker.events.CHALLENGE_MODE_RESET = function(self)
+function BuffTracker:OnChallengeModeReset()
     UpdateChallengeState(self)
     self:RequestUpdate(true)
 end
 
-BuffTracker.events.CHALLENGE_MODE_COMPLETED = function(self)
+function BuffTracker:OnChallengeModeCompleted()
     UpdateChallengeState(self)
     self:RequestUpdate(true)
 end
 
-BuffTracker.events.GROUP_ROSTER_UPDATE = function(self)
+function BuffTracker:OnGroupRosterUpdate()
     self:RequestUpdate(true)
 end
 
-BuffTracker.events.UNIT_AURA = function(self, unit)
+function BuffTracker:OnUnitAura(unit)
     if unit ~= "player" then return end
     self:RequestUpdate(false)
 end
 
-BuffTracker.events.PLAYER_REGEN_DISABLED = function(self)
+function BuffTracker:OnPlayerRegenDisabled()
     self._inCombat = true
-    CancelReadyCheckTimer(self)
+    if self._readyCheckTimer then
+        self._readyCheckTimer:Cancel()
+        self._readyCheckTimer = nil
+    end
     HideUI(self)
 end
 
-BuffTracker.events.PLAYER_REGEN_ENABLED = function(self)
+function BuffTracker:OnPlayerRegenEnabled()
     self._inCombat = false
     self:RequestUpdate(true)
 end
 
-BuffTracker.events.READY_CHECK = function(self)
-    CancelReadyCheckTimer(self)
+function BuffTracker:OnReadyCheck()
+    if self._readyCheckTimer then
+        self._readyCheckTimer:Cancel()
+        self._readyCheckTimer = nil
+    end
 
     self._inReadyCheck = true
     self:RequestUpdate(true)
@@ -295,6 +193,99 @@ BuffTracker.events.READY_CHECK = function(self)
     end)
 end
 
-BuffTracker.events.PLAYER_SPECIALIZATION_CHANGED = ScheduleTalentRefresh
-BuffTracker.events.TRAIT_CONFIG_UPDATED          = ScheduleTalentRefresh
-BuffTracker.events.ACTIVE_TALENT_GROUP_CHANGED   = ScheduleTalentRefresh
+function BuffTracker:OnTalentChanged()
+    ScheduleTalentRefresh(self)
+end
+
+-------------------------------------------------
+-- Ace3 Lifecycle Callbacks
+-------------------------------------------------
+function BuffTracker:OnInitialize()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = (self.db.enabled ~= false)
+
+    EnsureDeps(self)
+    if not self.Engine or not self.UI then
+        return
+    end
+    self.UI:Ensure(self)
+
+    local root = self.UI:GetRootFrame()
+    if root then
+        BS.Movers:Register(root, self.name, "Buff Tracker")
+    end
+
+    -- State
+    self._inCombat = InCombatLockdown()
+    self._inChallengeMode = IsMythicPlusActive() and true or false
+    self._inReadyCheck = false
+    self._readyCheckTimer = nil
+    self._talentTimer = nil
+end
+
+function BuffTracker:OnEnable()
+    self:OnInitialize()
+
+    self:Update()
+
+    -- Register events using AceEvent
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChangedNewArea")
+    self:RegisterEvent("CHALLENGE_MODE_START", "OnChallengeModeStart")
+    self:RegisterEvent("CHALLENGE_MODE_RESET", "OnChallengeModeReset")
+    self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeModeCompleted")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
+    self:RegisterEvent("UNIT_AURA", "OnUnitAura")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnPlayerRegenEnabled")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnPlayerRegenDisabled")
+    self:RegisterEvent("READY_CHECK", "OnReadyCheck")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTalentChanged")
+    self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnTalentChanged")
+    self:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED", "OnTalentChanged")
+end
+
+function BuffTracker:OnDisable()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    self.enabled = false
+    if self.db then self.db.enabled = false end
+
+    if self._readyCheckTimer then
+        self._readyCheckTimer:Cancel()
+        self._readyCheckTimer = nil
+    end
+    if self._talentTimer then
+        self._talentTimer:Cancel()
+        self._talentTimer = nil
+    end
+
+    self._inCombat = false
+    self._inChallengeMode = false
+    self._inReadyCheck = false
+
+    -- AceEvent automatically unregisters all events
+
+    if self.UI and self.UI.GetRootFrame then
+        local root = self.UI:GetRootFrame()
+        if root then
+            root:Hide()
+
+            if BS and BS.Movers and BS.Movers.Unregister then
+                BS.Movers:Unregister(root, self.name)
+            end
+        end
+    end
+end
+
+-------------------------------------------------
+-- ApplyOptions (for Config panel)
+-------------------------------------------------
+function BuffTracker:ApplyOptions()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+    -- Update behavior and UI with new config
+
+    if self.UI and self.UI.Refresh then
+        self.UI:Refresh()
+    end
+
+    self:Update()
+end

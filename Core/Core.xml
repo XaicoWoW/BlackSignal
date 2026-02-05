@@ -1,0 +1,7 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<Script file="API.lua"/>
+	<Script file="Events.lua"/>
+	<Script file="Tickers.lua"/>
+	<Script file="DB.lua"/>
+	<Script file="Movers.lua"/>
+</Ui>

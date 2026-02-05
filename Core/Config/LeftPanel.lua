@@ -1,7 +1,7 @@
 -- LeftPanel.lua
 -- @module LeftPanel
 -- @alias LeftPanel
-local _, BS      = ...
+local BS = _G.BS
 
 BS.LeftPanel     = BS.LeftPanel or {}
 local LeftPanel  = BS.LeftPanel

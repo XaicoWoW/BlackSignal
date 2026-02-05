@@ -1,6 +1,6 @@
-local _, BS = ...;
-BS.CheckButton = {};
+local BS = _G.BS;
 
+-- Use the table created by Init.lua, don't create a new one
 local CheckButton = BS.CheckButton;
 
 local function ApplyStyle(check, opts)

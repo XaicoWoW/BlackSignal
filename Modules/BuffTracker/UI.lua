@@ -1,9 +1,10 @@
 -- Modules/BuffTracker/UI.lua
 -- @module BuffTracker.UI
 
-local _, BS = ...
+local BS = _G.BS
 
 local UI = {}
+BS.BuffTrackerUI = UI
 
 -------------------------------------------------
 -- Frame helpers

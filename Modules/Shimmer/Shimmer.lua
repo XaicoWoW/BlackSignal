@@ -1,26 +1,40 @@
--- Modules/MovementWarnings.lua
--- @module MovementWarnings
--- @alias MovementWarnings
+-- Modules/Shimmer/Shimmer.lua
+-- @module Shimmer
+-- @alias Shimmer
 
-local _, BS            = ...
+local BS = _G.BS
 
-local API              = BS.API
-local Events           = BS.Events
+-------------------------------------------------
+-- Create as an Ace3 Module
+-------------------------------------------------
+local Shimmer = BS.Addon:NewModule("Shimmer", "AceEvent-3.0", "AceTimer-3.0")
 
-local MovementWarnings = {
-    name    = "BS_S",
-    label   = "Movement Warnings",
+-------------------------------------------------
+-- Module Metadata (for BS.API compatibility)
+-------------------------------------------------
+Shimmer.name = "BS_S"
+Shimmer.label = "Movement Warnings"
+Shimmer.enabled = true
+Shimmer.defaults = {
     enabled = true,
-    events  = {},
+    x = 0,
+    y = 18,
+    font = "Fonts\\FRIZQT__.TTF",
+    fontSize = 20,
+    outline = "OUTLINE",
+    autoSelect = true,
+    selectedKey = nil,
 }
 
-API:Register(MovementWarnings)
+-------------------------------------------------
+-- Register with BS.API (for Config panel compatibility)
+-------------------------------------------------
+BS.API:Register(Shimmer)
 
 -------------------------------------------------
 -- Spell (by class)
--- Each entry can contain multiple spellIds; we pick the first known.
 -------------------------------------------------
-local CLASS_SPELLS          = {
+local CLASS_SPELLS = {
     MAGE = {
         { key = "blink", label = "Blink/Shimmer", spellIds = { 212653, 1953 } },
     },
@@ -49,13 +63,13 @@ local CLASS_SPELLS          = {
         { key = "gust_winds", label = "Gust of Winds", spellIds = { 192063 } },
     },
     PRIEST = {
-        { key = "feather",   label = "Angelic Feather", sdapellIds = { 121536 } },
+        { key = "feather", label = "Angelic Feather", spellIds = { 121536 } },
     },
     DEATHKNIGHT = {
         { key = "deaths_advance", label = "Death's Advance", spellIds = { 48265 } },
     },
     DEMONHUNTER = {
-        { key = "felrush",  label = "Fel Rush",         spellIds = { 195072 } },
+        { key = "felrush", label = "Fel Rush", spellIds = { 195072 } },
         { key = "infernal_strike", label = "Infernal Strike", spellIds = { 189110 } },
         { key = "shift", label = "Shift", spellIds = { 1234796 } },
     },
@@ -65,29 +79,10 @@ local CLASS_SPELLS          = {
 }
 
 -------------------------------------------------
--- Defaults
--------------------------------------------------
-local defaults            = {
-    enabled     = true,
-    x           = 0,
-    y           = 18,
-
-    font        = "Fonts\\FRIZQT__.TTF",
-    fontSize    = 20,
-    outline     = "OUTLINE",
-
-    -- Selection
-    autoSelect  = true, -- auto-pick first known from class CLASS_SPELLS
-    selectedKey = nil, -- if set, try to use that key first (per-class list)
-}
-
-MovementWarnings.defaults = defaults
-
--------------------------------------------------
 -- Locals / helpers
 -------------------------------------------------
-local IsSpellKnown             = C_SpellBook and C_SpellBook.IsSpellKnown
-local GetSpellCooldown         = C_Spell.GetSpellCooldown
+local IsSpellKnown = C_SpellBook and C_SpellBook.IsSpellKnown
+local GetSpellCooldown = C_Spell.GetSpellCooldown
 local GetSpellCooldownDuration = C_Spell.GetSpellCooldownDuration
 
 local function GetPlayerClass()
@@ -111,7 +106,7 @@ end
 local function EnsureUI(self)
     if self.frame and self.text then return end
 
-    local f = CreateFrame("Frame", "BS_MovementWarningsDisplay", UIParent)
+    local f = CreateFrame("Frame", "BS_ShimmerDisplay", UIParent)
     f:SetSize(400, 30)
     f:SetFrameStrata("LOW")
     f:Show()
@@ -122,7 +117,7 @@ local function EnsureUI(self)
     t:SetTextColor(1, 1, 1, 1)
 
     self.frame = f
-    self.text  = t
+    self.text = t
 end
 
 local function ApplyPosition(self)
@@ -133,20 +128,20 @@ end
 
 local function ApplyFont(self)
     if not self.text or not self.db then return end
-    local font = self.db.font or defaults.font
-    local size = tonumber(self.db.fontSize) or defaults.fontSize
-    local outline = self.db.outline or defaults.outline
+    local font = self.db.font or self.defaults.font
+    local size = tonumber(self.db.fontSize) or self.defaults.fontSize
+    local outline = self.db.outline or self.defaults.outline
     self.text:SetFont(font, size, outline)
 end
 
 -------------------------------------------------
 -- Spell resolution
 -------------------------------------------------
-function MovementWarnings:ResolveSpell()
+function Shimmer:ResolveSpell()
     self.spellKey = nil
-    self.spellID  = nil
+    self.spellID = nil
 
-    local class   = GetPlayerClass()
+    local class = GetPlayerClass()
     if not class then return end
 
     local list = CLASS_SPELLS[class]
@@ -158,8 +153,8 @@ function MovementWarnings:ResolveSpell()
             if entry and entry.key == wanted then
                 local id = FirstKnownSpellId(entry.spellIds)
                 if id then
-                    self.spellKey   = entry.key
-                    self.spellID    = id
+                    self.spellKey = entry.key
+                    self.spellID = id
                     self.spellLabel = entry.label
                     return
                 end
@@ -172,8 +167,8 @@ function MovementWarnings:ResolveSpell()
     for _, entry in ipairs(list) do
         local id = entry and FirstKnownSpellId(entry.spellIds)
         if id then
-            self.spellKey   = entry.key
-            self.spellID    = id
+            self.spellKey = entry.key
+            self.spellID = id
             self.spellLabel = entry.label
             return
         end
@@ -183,19 +178,17 @@ end
 -------------------------------------------------
 -- Update
 -------------------------------------------------
-function MovementWarnings:Update()
+function Shimmer:Update()
     if not self.db or self.db.enabled == false then return end
     if not self.spellID or not self.frame or not self.text then return end
 
     local durationObject = GetSpellCooldownDuration(self.spellID)
-    ---@diagnostic disable-next-line: undefined-field
     if not durationObject or not durationObject.GetRemainingDuration then return end
 
-    ---@diagnostic disable-next-line: undefined-field
     local actualCooldown = durationObject:GetRemainingDuration(1)
 
-    local cdInfo         = GetSpellCooldown(self.spellID)
-    local isOnGCD        = cdInfo and cdInfo.isOnGCD
+    local cdInfo = GetSpellCooldown(self.spellID)
+    local isOnGCD = cdInfo and cdInfo.isOnGCD
 
     if self.frame.SetAlphaFromBoolean then
         self.frame:SetAlphaFromBoolean(isOnGCD ~= false, 0, 1)
@@ -210,13 +203,18 @@ function MovementWarnings:Update()
 end
 
 -------------------------------------------------
--- Ticker
+-- Ace3 Timer
 -------------------------------------------------
-function MovementWarnings:StartTicker()
-    BS.Tickers:Stop(self)
-    BS.Tickers:Register(self, 0.1, function()
-        self:Update()
-    end)
+function Shimmer:StartTicker()
+    -- Cancel existing timer
+    if self.updateTimer then
+        self:CancelTimer(self.updateTimer)
+        self.updateTimer = nil
+    end
+
+    -- Capture self in closure for the timer callback
+    local updateFunc = function() self:Update() end
+    self.updateTimer = self:ScheduleRepeatingTimer(updateFunc, 0.1)
 end
 
 -------------------------------------------------
@@ -234,17 +232,23 @@ local function TalentUpdate(self)
 end
 
 -------------------------------------------------
--- Init / Enable / Disable
+-- Ace3 Lifecycle Callbacks
 -------------------------------------------------
-function MovementWarnings:OnInit()
-    self.db = BS.DB:EnsureDB(self.name, defaults)
+function Shimmer:OnInitialize()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
     self.enabled = (self.db.enabled ~= false)
+end
+
+function Shimmer:OnEnable()
+    self:OnInitialize()
 
     EnsureUI(self)
     ApplyPosition(self)
     ApplyFont(self)
 
-    BS.Movers:Register(self.frame, self.name, "Movement Warnings")
+    if BS.Movers then
+        BS.Movers:Register(self.frame, self.name, self.label)
+    end
 
     self:ResolveSpell()
     self.frame:SetShown(self.enabled)
@@ -253,48 +257,57 @@ function MovementWarnings:OnInit()
         self:StartTicker()
         self:Update()
     else
-        BS.Tickers:Stop(self)
+        if self.updateTimer then
+            self:CancelTimer(self.updateTimer)
+            self.updateTimer = nil
+        end
     end
 
-    Events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-    Events:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    Events:RegisterEvent("TRAIT_CONFIG_UPDATED")
-    Events:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+    -- Register events using AceEvent
+    self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "Update")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTalentChanged")
+    self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnTalentChanged")
+    self:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED", "OnTalentChanged")
 end
 
-function MovementWarnings:OnDisabled()
-    self.db = BS.DB:EnsureDB(self.name, defaults)
+function Shimmer:OnDisable()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
     self.enabled = false
     if self.db then self.db.enabled = false end
 
-    if BS.Tickers and BS.Tickers.Stop then
-        BS.Tickers:Stop(self)
+    -- Cancel timer using AceTimer
+    if self.updateTimer then
+        self:CancelTimer(self.updateTimer)
+        self.updateTimer = nil
     end
 
-    if Events and Events.UnregisterAllEventsFor then
-        Events:UnregisterAllEventsFor(self)
-    else
-        if Events and Events.UnregisterEvent then
-            Events:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
-            Events:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-            Events:UnregisterEvent("TRAIT_CONFIG_UPDATED")
-            Events:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-        end
-    end
+    -- AceEvent automatically unregisters all events
 
     if self.frame then
         self.frame:Hide()
     end
-
-    if BS.Movers and BS.Movers.Unregister and self.frame then
-        BS.Movers:Unregister(self.frame, self.name)
-    end
 end
 
 -------------------------------------------------
--- Events
+-- Event Handlers (AceEvent style)
 -------------------------------------------------
-MovementWarnings.events.SPELL_UPDATE_COOLDOWN         = function(self) self:Update() end
-MovementWarnings.events.PLAYER_SPECIALIZATION_CHANGED = TalentUpdate
-MovementWarnings.events.TRAIT_CONFIG_UPDATED          = TalentUpdate
-MovementWarnings.events.ACTIVE_TALENT_GROUP_CHANGED   = TalentUpdate
+function Shimmer:OnTalentChanged()
+    TalentUpdate(self)
+end
+
+-------------------------------------------------
+-- ApplyOptions (for Config panel)
+-------------------------------------------------
+function Shimmer:ApplyOptions()
+    self.db = BS.DB:EnsureDB(self.name, self.defaults)
+
+    ApplyPosition(self)
+    ApplyFont(self)
+
+    -- Restart ticker with new settings if enabled
+    if self.enabled then
+        self:StartTicker()
+    end
+
+    self:Update()
+end

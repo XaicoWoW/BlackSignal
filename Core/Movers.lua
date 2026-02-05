@@ -2,9 +2,9 @@
 -- @module Movers
 -- @alias Movers
 
-local _, BS = ...
+local BS = _G.BS
 
-BS.Movers       = {}
+-- Use the table created by Init.lua, don't create a new one
 local Movers    = BS.Movers
 
 

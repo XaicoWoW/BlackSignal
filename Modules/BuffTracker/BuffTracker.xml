@@ -1,0 +1,6 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<Script file="Data.lua"/>
+	<Script file="Engine.lua"/>
+	<Script file="UI.lua"/>
+	<Script file="BuffTracker.lua"/>
+</Ui>
